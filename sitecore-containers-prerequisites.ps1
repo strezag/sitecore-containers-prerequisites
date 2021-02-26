@@ -1,0 +1,523 @@
+<#
+    .SYNOPSIS
+    Checks the machine for Sitecore Container compatibility.
+
+    .DESCRIPTION
+
+    Quickly verify Sitecore Container:
+        - Hardware requirements (CPU, RAM, DISK STORAGE and TYPES)
+        - Operating system compatibility (OS Build Version, Hyper-V/Containers Feature Check, IIS Running State)
+        - Software requirements (Docker Desktop, Docker engine OS type Linux vs Windows Containers)
+        - Network Port Check (443, 8079, 8984, 14330)
+
+    Download and Install required software:
+        - Chocolatey
+        - Docker Desktop
+        - mkcert
+
+    Enable required Windows Features
+        - Containers
+        - Hyper-V
+
+    Download latest 10.1.0 
+        - Container Package ZIP
+        - Local Development Installation Guide PDF
+
+    .AUTHOR
+     @GabeStreza
+#>
+
+function Invoke-Menu () {
+    # 'Invoke-Menu' is inspired by Josiah Deal: https://community.spiceworks.com/scripts/show/4656-powershell-create-menu-easily-add-arrow-key-driven-menu-to-scripts
+    param(
+        [Parameter(Mandatory = $True)][String]$MenuTitle,
+        [Parameter(Mandatory = $True)][array]$MenuOptions
+    )
+
+    $MaxValue = $MenuOptions.count - 1
+    $Selection = 0
+    $EnterPressed = $false
+    
+    Clear-Host
+
+
+    while ($EnterPressed -eq $false) {
+        
+        Write-Host "`n$MenuTitle`n" -ForegroundColor Cyan
+        Write-Host "Script developed by @GabeStreza`nhttps://streza.dev`n" -ForegroundColor Magenta
+        Write-Host "Sitecore Container Docs`n > https://containers.doc.sitecore.com/`n" -ForegroundColor DarkCyan
+
+        for ($i = 0; $i -le $MaxValue; $i++) {
+            
+            if ($i -eq $Selection) {
+                Write-Host -BackgroundColor Cyan -ForegroundColor Black "$($MenuOptions[$i])"
+            }
+            else {
+                Write-Host "  $($MenuOptions[$i])  "
+            }
+        }
+
+        $KeyInput = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown").virtualkeycode
+
+        switch ($KeyInput) {
+            13 {
+                $EnterPressed = $True
+                return $Selection
+                Clear-Host
+                break
+            }
+
+            38 {
+                if ($Selection -eq 0) {
+                    $Selection = $MaxValue
+                }
+                else {
+                    $Selection -= 1
+                }
+                Clear-Host
+                break
+            }
+
+            40 {
+                if ($Selection -eq $MaxValue) {
+                    $Selection = 0
+                }
+                else {
+                    $Selection += 1
+                }
+                Clear-Host
+                break
+            }
+            default {
+                Clear-Host
+            }
+        }
+    }
+}
+
+function Invoke-HardwareCheck {
+    ########## Checking number of CPU cores */
+    Write-Host "`n`nCHECKING CORES..." -ForegroundColor Cyan
+
+    $cores = Get-WmiObject -class Win32_processor
+    if ($cores.NumberOfCores -ge 4) {
+        Write-Host "+ Minimum number of cores (4) confirmed: " $cores.NumberOfCores " cores installed." -ForegroundColor Green
+        $script:HwCoresCheckPassed = $true
+    }
+    else {
+        Write-Host "X Minimum number of cores (4) not available." -ForegroundColor Red
+        Write-Host "Currently installed: " $cores.NumberOfCores -ForegroundColor Red
+    }
+
+
+    ########## Checking minimum RAM requirements */
+    Write-Host "`n`nCHECKING RAM..." -ForegroundColor Cyan
+
+    $InstalledRAM = Get-WmiObject -Class Win32_ComputerSystem
+    $RAMinGB = [Math]::Round(($InstalledRAM.TotalPhysicalMemory / 1GB), 2)
+    if ($RAMinGB -ge 16.0) {
+        Write-Host "+ Minimum RAM (16GB) confirmed: " $RAMinGB "GB installed." -ForegroundColor Green
+        $script:hwRAMCheckPassed = $true
+        if ($RAMinGB -ge 32.0) {
+            Write-Host "+ Recommended RAM (32GB) confirmed: " $RAMinGB "GB installed." -ForegroundColor Green
+        }
+    }
+    else {
+        Write-Host "X Minimum RAM not available." -ForegroundColor Red
+    }
+
+
+    ########## Checking minimum disk drive requirements */
+    Write-Host "`n`nCHECKING DISK TYPE & STORAGE..." -ForegroundColor Cyan
+
+    $AvailableDiskSpace = Get-WmiObject -Class Win32_LogicalDisk -Filter 'DriveType = 3' 
+    $driveCount = 0;
+    $ssdCount = 0;
+    $DeviceDrives = $AvailableDiskSpace | Select-Object DeviceID, DeviceType, @{n = 'FreeSpace'; e = { [int]($_.FreeSpace / 1GB) } }, @{n = 'Size'; e = { [int]($_.Size / 1GB) } } 
+    $DeviceDrives | ForEach-Object {
+        if ($_.Size -ge 25) {
+            Write-Host "+ Minimum Disk space available for '$($_.DeviceID)' drive ($($_.FreeSpace) GB / $($_.Size) GB) met." -ForegroundColor Green
+            $driveCount++
+        }
+    }
+
+    # Check number of SSDs 
+    Get-PhysicalDisk | Select-Object MediaType | ForEach-Object { 
+        $ssdCount++
+    }
+
+    if ($driveCount -ge 1) {
+        Write-Host "+ At least one drive available with required 25 GB free space is available." -ForegroundColor Green
+        $script:diskStorageCheckPassed = $true
+    }
+    else {
+        Write-Host "X Minimum disk space (25GB) not available." -ForegroundColor Red
+    }
+
+    if ($ssdCount -eq $driveCount) {
+        Write-Host "+ All disks are SSD." -ForegroundColor Green
+        $script:diskTypeCheckPassed = $true
+    }
+    elseif ($ssdCount -ge 1) {
+        Write-Host "+ At least one disk is an SSD out of $driveCount drives detected." -ForegroundColor Yellow
+        $script:diskTypeCheckPassed = $true
+    }
+    else {
+        Write-Host "X No SSD drives detected. Sitecore recommends running Docker environments on SSDs over HDDs." -ForegroundColor Red
+    }
+}
+
+function Invoke-OperatingSystemCheck {
+    ########## Check OS version Windows 10/Server 1903 or later */
+    Write-Host "`n`nCHECKING OPERATING SYSTEM COMPATIBILITY..." -ForegroundColor Cyan
+
+    $OSVersion = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName)
+    $OSProductName = $OSVersion.ProductName
+
+    switch ([System.Environment]::OSVersion.Version.Build) {
+        18362 { 
+            Write-Host "+ $OSProductName 1903 detected." -ForegroundColor Green
+        }
+        18363 { 
+            Write-Host "+ $OSProductName 1909 detected." -ForegroundColor Green
+        }
+        19041 { 
+            Write-Host "+ $OSProductName 2004 detected." -ForegroundColor Green
+        }
+        19042 { 
+            Write-Host "+ $OSProductName 20H2 detected." -ForegroundColor Green
+        }
+        Default { 
+            $script:OSCheckPassed = $false 
+        }
+    }
+
+    if ($script:OSCheckPassed) {
+        Write-Host "+ Operating system is compatible." -ForegroundColor Green
+    }
+    else {
+        Write-Host "X Operating system is not compatible." -ForegroundColor Red
+    }
+
+    ########## Check Containers Windows Feature is enabled */
+    Write-Host "`n`nVERIFYING CONTAINERS FEATURE STATE..." -ForegroundColor Cyan
+
+    $containersService = Get-WindowsOptionalFeature -Online | Where-Object { $_.FeatureName -eq "Containers" }
+    if ($containersService.State -eq "Enabled") {
+        Write-Host "+ The 'Containers' feature is enabled." -ForegroundColor Green
+        $script:containersFeatureEnabled = $true
+    }
+    else {
+        Write-Host "X The 'Containers' feature is disabled." -ForegroundColor Red
+    }
+    
+    ########## Check Hyper-V Windows Feature is enabled */
+    Write-Host "`n`nVERIFYING HYPER-V FEATURE STATE..." -ForegroundColor Cyan
+
+    $hyperVService = Get-WindowsOptionalFeature -Online | Where-Object { $_.FeatureName -eq "Microsoft-Hyper-V" }
+    if ($hyperVService.State -eq "Enabled") {
+        Write-Host "+ The 'Microsoft-Hyper-V' feature is enabled." -ForegroundColor Green
+        $script:hyperVEnabled = $true
+    }
+    else {
+        Write-Host "X The 'Microsoft-Hyper-V' feature is disabled.  Consider enabling using 'Enable-WindowsOptionalFeature -Online -FeatureName -All'." -ForegroundColor Red
+    }
+
+    ########## Check that IIS is turned OFF  */
+    Write-Host "`n`nDETECTING IIS RUNNING STATE..." -ForegroundColor Cyan
+
+    $vm = "localhost";
+    $iis = Get-WmiObject Win32_Service -ComputerName $vm -Filter "name='IISADMIN'"
+
+    if ($iis.State -eq "Running") {
+        Write-Host "X IIS is running on $vm.  Turn off IIS." -ForegroundColor Red
+    } 
+    else {
+        $script:IISOffCheckPassed = $true
+        Write-Host "+ IIS not running on $vm." -ForegroundColor Green
+    }
+}
+
+function Invoke-SoftwareCheck {
+    ########## Check that Docker in installed  */
+    Write-Host "`n`nVERIFYING DOCKER DESKTOP IS INSTALLED..." -ForegroundColor Cyan
+    $AvailableDiskSpace = Get-WmiObject -Class Win32_LogicalDisk -Filter 'DriveType = 3' 
+    $DeviceDrives = $AvailableDiskSpace | Select-Object DeviceID 
+    foreach ($drive in $DeviceDrives) {
+
+        $dockerProgramFilesPath = "$($drive.DeviceID)\Program Files\Docker";
+        if (Test-Path -Path $dockerProgramFilesPath) {
+            Write-Host "+ Docker found installed at '$dockerProgramFilesPath'" -ForegroundColor Green
+            $script:dockerInstalled = $true
+        }
+
+        $dockerProgramDataPath = "$($drive.DeviceID)\ProgramData\Docker";
+        if (Test-Path -Path $dockerProgramDataPath) {
+            if ((Get-ChildItem $dockerProgramDataPath | Measure-Object).Count) {
+                Write-Host "+ Docker found installed at '$dockerProgramDataPath'" -ForegroundColor Green
+                $script:dockerInstalled = $true
+            }
+        }
+    }
+
+    ########## Check if Docker services are running  */
+    Write-Host "`n`nVERIFYING DOCKER SERVICES ARE RUNNING..." -ForegroundColor Cyan
+
+    if ($script:dockerInstalled = $true) {
+        $DockerDesktopServiceName = "com.docker.service"
+        try {
+            $dockerDesktopService = Get-Service -Name $DockerDesktopServiceName
+            if ($dockerDesktopService.Status -eq "Running") {
+                Write-Host "+ Docker Desktop service is running." -ForegroundColor Green
+                $script:dockerRunning = $true
+            }
+            else {
+                Write-Host "X Docker Desktop service is not running." -ForegroundColor Red
+                $script:dockerRunning = $false
+            }
+        }
+        catch {
+            Write-Host "X Docker Desktop service is not running." -ForegroundColor Red
+            $script:dockerRunning = $false
+        }
+    
+        $DockerDaemonServiceName = "docker"
+        try {
+            $dockerDaemonService = Get-Service -Name $DockerDaemonServiceName  -ErrorAction Stop
+            if ($dockerDaemonService.Status -eq "Running") {
+                Write-Host "+ Docker daemon service is running." -ForegroundColor Green
+                $script:dockerRunning = $true
+            }
+            else {
+                Write-Host "+ Docker daemon service not running." -ForegroundColor Red
+                $script:dockerRunning = $false
+            }
+        }
+        catch {
+            Write-Host "X Docker daemon service is not running." -ForegroundColor Red
+            $script:dockerRunning = $false
+        }
+
+        if ($script:dockerRunning) {
+            if (((docker version) | Where-Object { $_ -match "linux" }).count) {
+                Write-Host "X Docker Desktop is currently configured for Linux containers. Switch to Windows Containers." -ForegroundColor Red
+                $script:dockerRunning = $false
+            }else{
+                Write-Host "+ Docker Desktop is currently configured for Windows Containers." -ForegroundColor Green
+            }
+        }
+    }
+}
+
+function Invoke-NetworkPortCheck {
+
+    ########## Checking required TCP port availability  */
+    Write-Host "`n`nCHECKING REQUIRED TCP PORT AVAILABILITY..." -ForegroundColor Cyan
+
+    $tcpPortAvailableCount = 0
+    if ((Get-NetTCPConnection | Where-Object Localport -eq 443).Count -eq 0) {
+        Write-Host "+ TCP port 443 (required for Traefik HTTPS proxy) is available." -ForegroundColor Green
+        $tcpPortAvailableCount++
+    }
+    else {
+        Write-Host "X TCP port 443 (required for Traefik HTTPS proxy) is not available." -ForegroundColor Red
+    }
+
+    if ((Get-NetTCPConnection | Where-Object Localport -eq 8079).Count -eq 0) {
+        Write-Host "+ TCP port 8079 (required for Traefik dashboard) is available." -ForegroundColor Green
+        $tcpPortAvailableCount++
+    }
+    else {
+        Write-Host "X TCP port 8079 (required for Traefik dashboard) is not available." -ForegroundColor Red
+    }
+
+    if ((Get-NetTCPConnection | Where-Object Localport -eq 8081).Count -eq 0) {
+        $tcpPortAvailableCount++
+        Write-Host "+ TCP port 8081 (required for xConnect) is available." -ForegroundColor Green
+    }
+    else {
+        Write-Host "X TCP port 8081 (required for xConnect) is not available." -ForegroundColor Red
+    }
+
+    if ((Get-NetTCPConnection | Where-Object Localport -eq 8984).Count -eq 0) {
+        $tcpPortAvailableCount++
+        Write-Host "+ TCP port 8984 (required for Solr API and dashboard) is available." -ForegroundColor Green
+    }
+    else {
+        Write-Host "X TCP port 8984 (required for Solr API and dashboard) is not available." -ForegroundColor Red
+    }
+
+    if ((Get-NetTCPConnection | Where-Object Localport -eq 14330).Count -eq 0) {
+        $tcpPortAvailableCount++
+        Write-Host "+ TCP port 14330 (required for SQL Server) is available." -ForegroundColor Green
+    }
+    else {
+        Write-Host "X TCP port 14330 (required for SQL Server) is not available." -ForegroundColor Red
+    }
+
+    if ($tcpPortAvailableCount -eq 5) {
+        $script:tcpPortsAvailable = $true
+    }
+}
+
+function Invoke-FullPrerequisiteCheck {
+    Invoke-HardwareCheck
+    Invoke-OperatingSystemCheck
+    Invoke-SoftwareCheck
+    Invoke-NetworkPortCheck
+
+    Write-Host "`n**********************************************`n" -ForegroundColor Cyan 
+
+    if ($script:HwCoresCheckPassed -and $script:hwRAMCheckPassed -and $script:diskStorageCheckPassed -and $script:OSCheckPassed -and $script:IISOffCheckPassed -and $script:hyperVEnabled -and $script:containersFeatureEnabled -and $script:dockerInstalled -and $script:dockerRunning -and $script:tcpPortsAvailable) {
+        Write-Host "This machine is READY to for Sitecore Containers!`n`n" -ForegroundColor Green
+    }
+    else {
+        Write-Host "X This machine may not be quite ready for Sitecore Containers.`n`n" -ForegroundColor Red
+    }
+}
+
+function Install-Chocolatey {
+    # Check if Chocolaty is installed
+    if ((Get-ChildItem -Path Env:\ | Where-Object { $_.Name -match "Chocolatey" }).Count -eq 0) {
+        Write-Host "X Chocolatey is not installed." -ForegroundColor Yellow
+        Set-ExecutionPolicy Bypass -Scope Process -Force; 
+        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+    }
+    else {
+        Write-Host "+ Chocolatey is already installed." -ForegroundColor Green
+    }
+}
+
+function Install-DockerDesktop {
+    if ((Get-ChildItem -Path Env:\ | Where-Object { $_.Name -match "Chocolatey" }).Count -eq 0) {
+        Write-Host "X Chocolatey is not installed yet.  Cannot installed 'Docker Desktop'." -ForegroundColor Yellow
+    }
+    else {
+        choco install docker-desktop
+    }
+  
+}
+function Install-Mkcert {
+    if ((Get-ChildItem -Path Env:\ | Where-Object { $_.Name -match "Chocolatey" }).Count -eq 0) {
+        Write-Host "X Chocolatey is not installed yet.  Cannot installed 'mkcert'." -ForegroundColor Yellow
+    }
+    else {
+        choco install mkcert
+    }
+}
+
+function Enable-ContainersFeature{
+    Enable-WindowsOptionalFeature -Online -FeatureName containers -All
+}
+
+function Enable-HyperVFeature {
+    Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All
+}
+
+function Invoke-SitecoreContainerGuideDownload {
+    Write-Host "Downloading 'Installation Guide for Developer Workstation with Containers (10.1) (10.1.0.005207.309)' to $((Get-Location).Path).`n" -ForegroundColor Magenta
+    Invoke-WebRequest -Uri "https://sitecoredev.azureedge.net/~/media/F53BECFEBDC64C8695EDF60D4E435AEA.ashx?date=20210224T164409" -OutFile ".\SitecoreContainerDeployment.10.1.0.005207.309.pdf"
+    Invoke-Item (Get-Location).Path
+    Invoke-Pause
+}
+
+function Invoke-SitecoreContainerPackageDownload{
+    Write-Host "Downloading 'Initial release of SXP Sitecore Container Deployment for Sitecore 10.1 (10.1.0.005207.309).zip' to $((Get-Location).Path).`n" -ForegroundColor Magenta
+    Invoke-WebRequest -Uri "https://github.com/Sitecore/container-deployment/releases/download/sxp%2F10.1.0.005207.309/SitecoreContainerDeployment.10.1.0.005207.309.zip" -OutFile ".\SitecoreContainerDeployment.10.1.0.005207.309.zip"
+    Invoke-Item (Get-Location).Path
+    Invoke-Pause
+}
+
+function Invoke-Pause {
+    Write-Host -NoNewLine "`n`nPress any key to continue..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Set-Menu
+}
+
+function Set-Menu {
+    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisite Check', 'Scan Operating System & Features Check', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", "Install mkcert", "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", "Download 10.1.0 Developer Installation Guide (PDF)", "Download 10.1.0 Sitecore Container Package (ZIP)" , 'Exit')
+
+    $menuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $menuOptions
+    
+    if ($menuSelection -eq 0) {
+        Write-Host "`nFull Prerequisite Check" -ForegroundColor Magenta
+        Invoke-FullPrerequisiteCheck
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 1) {
+        Write-Host "`nHardware Prerequisite Check" -ForegroundColor Magenta
+        Invoke-HardwareCheck
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 2) {
+        Write-Host "`nOperating System & Features Check" -ForegroundColor Magenta
+        Invoke-OperatingSystemCheck
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 3) {
+        Write-Host "`nSoftware Prerequisite Check" -ForegroundColor Magenta
+        Invoke-SoftwareCheck
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 4) {
+        Write-Host "`nNetwork Port Check" -ForegroundColor Magenta
+        Invoke-NetworkPortCheck
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 5) {
+        Write-Host "`nInstalling Chocolatey" -ForegroundColor Magenta
+        Install-Chocolatey
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 6) {
+        Write-Host "`nInstalling Docker Desktop" -ForegroundColor Magenta
+        Install-DockerDesktop
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 7) {
+        Write-Host "`nInstalling mkcert" -ForegroundColor Magenta
+        Install-Mkcert
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 8) {
+        Write-Host "`nEnabling 'Containers' Windows Feature" -ForegroundColor Magenta
+        Enable-ContainersFeature
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 9) {
+        Write-Host "`nEnabling 'Hyper-V' Windows Feature" -ForegroundColor Magenta
+        Enable-HyperVFeature
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 10) {
+        Write-Host "`nDownloading 10.1.0 Developer Workstation Container Installation Guide" -ForegroundColor Magenta
+        Invoke-SitecoreContainerGuideDownload
+    }
+    elseif ($menuSelection -eq 11) {
+        Write-Host "`nDownloading 10.1.0 Container Deployment Package" -ForegroundColor Magenta
+        Invoke-SitecoreContainerPackageDownload
+    }
+    elseif ($menuSelection -eq 12) {
+        Write-Host "`nBye!" -ForegroundColor Magenta
+        exit
+    }
+}
+
+$script:HwCoresCheckPassed = $false
+$script:hwRAMCheckPassed = $false
+$script:diskStorageCheckPassed = $false
+$script:OSCheckPassed = $true
+$script:IISOffCheckPassed = $false
+$script:hyperVEnabled = $false
+$script:containersFeatureEnabled = $false
+$script:dockerInstalled = $false
+$script:dockerRunning = $false
+$script:tcpPortsAvailable = $false
+
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if(!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
+    Write-Host "Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
+    exit
+}
+
+Set-Menu
