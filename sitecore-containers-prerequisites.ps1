@@ -7,7 +7,7 @@
     Quickly verify Sitecore Container:
         - Hardware requirements (CPU, RAM, DISK STORAGE and TYPES)
         - Operating system compatibility (OS Build Version, Hyper-V/Containers Feature Check, IIS Running State)
-        - Software requirements (Docker Desktop, Docker engine OS type Linux vs Windows Containers)
+        - Software requirements (Docker Desktop, Docker engine OS type Linux vs Windows Containers, DNS setting, SitecoreDockerTools PSModule)
         - Network Port Check (443, 8079, 8984, 14330)
 
     Download and Install required software:
@@ -22,6 +22,8 @@
     Download latest 10.1.0 
         - Container Package ZIP
         - Local Development Installation Guide PDF
+
+    Open Container Docs
 
     .AUTHOR
      @GabeStreza
@@ -109,7 +111,6 @@ function Invoke-HardwareCheck {
         Write-Host "Currently installed: " $cores.NumberOfCores -ForegroundColor Red
     }
 
-
     ########## Checking minimum RAM requirements */
     Write-Host "`n`nCHECKING RAM..." -ForegroundColor Cyan
 
@@ -125,7 +126,6 @@ function Invoke-HardwareCheck {
     else {
         Write-Host "X Minimum RAM not available." -ForegroundColor Red
     }
-
 
     ########## Checking minimum disk drive requirements */
     Write-Host "`n`nCHECKING DISK TYPE & STORAGE..." -ForegroundColor Cyan
@@ -147,11 +147,11 @@ function Invoke-HardwareCheck {
     }
 
     if ($driveCount -ge 1) {
-        Write-Host "+ At least one drive available with required 25 GB free space is available." -ForegroundColor Green
+        Write-Host "+ At least one drive with required 25 GB free space is available." -ForegroundColor Green
         $script:diskStorageCheckPassed = $true
     }
     else {
-        Write-Host "X Minimum disk space (25GB) not available." -ForegroundColor Red
+        Write-Host "X Minimum disk space (25 GB) not available." -ForegroundColor Red
     }
 
     if ($ssdCount -eq $driveCount) {
@@ -258,8 +258,21 @@ function Invoke-SoftwareCheck {
                 $script:dockerInstalled = $true
             }
         }
-    }
 
+        if($script:dockerInstalled -eq $true){
+            $dockerProgramFilesPath = "$($drive.DeviceID)\Program Files\Docker";
+            if (Test-Path -Path $dockerProgramFilesPath) {
+                $dnsSetting = (Get-Content "$($drive.DeviceID)\ProgramData\Docker\config\daemon.json" | ConvertFrom-Json | Select-Object dns).dns 
+                if(($dnsSetting| Measure-Object).Count -gt 0){
+                    if($dnsSetting -match "8.8.8.8"){
+                        Write-Host "+ Docker DNS is set to Google's public DNS server:  $dnsSetting"  -ForegroundColor Green
+                    }else {
+                        Write-Host "- Docker's '$($drive.DeviceID)\ProgramData\Docker\config\daemon.json' configuration is not set to Google's public DNS server: 8.8.8.8.`nCurrent setting:  $dnsSetting" -ForegroundColor Yellow
+                    }
+                }
+            }
+        }
+    }
     ########## Check if Docker services are running  */
     Write-Host "`n`nVERIFYING DOCKER SERVICES ARE RUNNING..." -ForegroundColor Cyan
 
@@ -307,6 +320,10 @@ function Invoke-SoftwareCheck {
             }
         }
     }
+
+    ########## Check for SitecoreDockerTools PSModule install status  */
+    Write-Host "`n`nVERIFYING 'SitecoreDockerTools' POWERSHELL MODULE IS INSTALLED..." -ForegroundColor Cyan
+    Invoke-SitecoreDockerToolsCheck
 }
 
 function Invoke-NetworkPortCheck {
@@ -368,7 +385,7 @@ function Invoke-FullPrerequisiteCheck {
 
     Write-Host "`n**********************************************`n" -ForegroundColor Cyan 
 
-    if ($script:HwCoresCheckPassed -and $script:hwRAMCheckPassed -and $script:diskStorageCheckPassed -and $script:OSCheckPassed -and $script:IISOffCheckPassed -and $script:hyperVEnabled -and $script:containersFeatureEnabled -and $script:dockerInstalled -and $script:dockerRunning -and $script:tcpPortsAvailable) {
+    if ($script:HwCoresCheckPassed -and $script:hwRAMCheckPassed -and $script:diskStorageCheckPassed -and $script:OSCheckPassed -and $script:IISOffCheckPassed -and $script:hyperVEnabled -and $script:containersFeatureEnabled -and $script:dockerInstalled -and $script:dockerRunning -and $script:tcpPortsAvailable -and $psModuleScDockerTools) {
         Write-Host "This machine is READY to for Sitecore Containers!`n`n" -ForegroundColor Green
     }
     else {
@@ -397,6 +414,7 @@ function Install-DockerDesktop {
     }
   
 }
+
 function Install-Mkcert {
     if ((Get-ChildItem -Path Env:\ | Where-Object { $_.Name -match "Chocolatey" }).Count -eq 0) {
         Write-Host "X Chocolatey is not installed yet.  Cannot installed 'mkcert'." -ForegroundColor Yellow
@@ -404,6 +422,42 @@ function Install-Mkcert {
     else {
         choco install mkcert
     }
+}
+
+function Invoke-SitecoreDockerToolsCheck {
+    if(((Get-PSRepository -Name SitecoreGallery) | Measure-Object).Count -gt 0){
+        Write-Host "+ 'SitecoreGallery' successfully registered." -ForegroundColor Green
+    }else {
+        Write-Host "+ 'SitecoreGallery' is not registered" -ForegroundColor Yellow
+    }
+
+    if((Get-InstalledModule SitecoreDockerTools | Measure-Object).Count -gt 0){
+        Write-Host "+ 'SitecoreDockerTools' PowerShell Module is installed." -ForegroundColor Green
+        $script:psModuleScDockerTools = $true
+    }else{
+        Write-Host "+ 'SitecoreDockerTools' PowerShell Module is not installed." -ForegroundColor Yellow
+        $script:psModuleScDockerTools = $false
+    }
+}
+
+function Install-SitecoreDockerTools{
+    if(((Get-PSRepository -Name SitecoreGallery) | Measure-Object).Count -gt 0){
+        Write-Host "`n+ 'SitecoreGallery' successfully registered.`n" -ForegroundColor Green
+    }else {
+        Write-Host "`n+ 'Registering 'SitecoreGallery' with SourceLocation set to 'https://sitecore.myget.org/F/sc-powershell/api/v2'... " -ForegroundColor Yellow
+        Register-PSRepository -Name SitecoreGallery -SourceLocation https://sitecore.myget.org/F/sc-powershell/api/v2
+        Write-Host "+ 'SitecoreGallery' successfully registered.`n" -ForegroundColor Green
+    }
+
+    if((Get-InstalledModule SitecoreDockerTools | Measure-Object).Count -gt 0){
+        Write-Host "+ 'SitecoreDockerTools' PowerShell Module is installed." -ForegroundColor Green
+    }else{
+        Write-Host "+ 'SitecoreDockerTools' PowerShell Module is installing..." -ForegroundColor Yellow
+        Install-Module SitecoreDockerTools
+        Write-Host "+ 'SitecoreDockerTools' PowerShell Module is installed." -ForegroundColor Green
+    }
+    $script:psModuleScDockerTools = $true
+    Import-Module SitecoreDockerTools
 }
 
 function Enable-ContainersFeature{
@@ -428,6 +482,12 @@ function Invoke-SitecoreContainerPackageDownload{
     Invoke-Pause
 }
 
+function Invoke-OpenContainerDocs {
+    $Url = "https://doc.sitecore.com/developers/101/developer-tools/en/containers-in-sitecore-development.html"
+    Start-Process $Url
+    Invoke-Pause
+}
+
 function Invoke-Pause {
     Write-Host -NoNewLine "`n`nPress any key to continue..." -ForegroundColor Yellow
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
@@ -435,7 +495,7 @@ function Invoke-Pause {
 }
 
 function Set-Menu {
-    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisite Check', 'Scan Operating System & Features Check', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", "Install mkcert", "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", "Download 10.1.0 Developer Installation Guide (PDF)", "Download 10.1.0 Sitecore Container Package (ZIP)" , 'Exit')
+    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", "Install mkcert", "Install SitecoreDockerTools PowerShell Module", "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", "Download 10.1.0 Developer Installation Guide (PDF)", "Download 10.1.0 Sitecore Container Package (ZIP)", "Open Sitecore Container Docs" , 'Exit')
 
     $menuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $menuOptions
     
@@ -472,6 +532,7 @@ function Set-Menu {
     elseif ($menuSelection -eq 6) {
         Write-Host "`nInstalling Docker Desktop" -ForegroundColor Magenta
         Install-DockerDesktop
+
         Invoke-Pause
     }
     elseif ($menuSelection -eq 7) {
@@ -480,24 +541,34 @@ function Set-Menu {
         Invoke-Pause
     }
     elseif ($menuSelection -eq 8) {
+        Write-Host "`nInstalling SitecoreDockerTools" -ForegroundColor Magenta
+        Install-SitecoreDockerTools
+        Write-SitecoreDockerWelcome
+        Invoke-Pause
+    }
+    elseif ($menuSelection -eq 9) {
         Write-Host "`nEnabling 'Containers' Windows Feature" -ForegroundColor Magenta
         Enable-ContainersFeature
         Invoke-Pause
     }
-    elseif ($menuSelection -eq 9) {
+    elseif ($menuSelection -eq 10) {
         Write-Host "`nEnabling 'Hyper-V' Windows Feature" -ForegroundColor Magenta
         Enable-HyperVFeature
         Invoke-Pause
     }
-    elseif ($menuSelection -eq 10) {
+    elseif ($menuSelection -eq 11) {
         Write-Host "`nDownloading 10.1.0 Developer Workstation Container Installation Guide" -ForegroundColor Magenta
         Invoke-SitecoreContainerGuideDownload
     }
-    elseif ($menuSelection -eq 11) {
+    elseif ($menuSelection -eq 12) {
         Write-Host "`nDownloading 10.1.0 Container Deployment Package" -ForegroundColor Magenta
         Invoke-SitecoreContainerPackageDownload
     }
-    elseif ($menuSelection -eq 12) {
+    elseif ($menuSelection -eq 13) {
+        Write-Host "`nOpen 10.1.0 Container Docs" -ForegroundColor Magenta
+        Invoke-OpenContainerDocs
+    }
+    elseif ($menuSelection -eq 14) {
         Write-Host "`nBye!" -ForegroundColor Magenta
         exit
     }
@@ -513,6 +584,7 @@ $script:containersFeatureEnabled = $false
 $script:dockerInstalled = $false
 $script:dockerRunning = $false
 $script:tcpPortsAvailable = $false
+$script:psModuleScDockerTools = $false
 
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if(!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
