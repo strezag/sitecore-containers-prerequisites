@@ -101,7 +101,7 @@ function Invoke-HardwareCheck {
     ########## Checking number of CPU cores */
     Write-Host "`n`nCHECKING CORES..." -ForegroundColor Cyan
 
-    $cores = Get-WmiObject -class Win32_processor
+    $cores = Get-CimInstance -class Win32_processor
     if ($cores.NumberOfCores -ge 4) {
         Write-Host "+ Minimum number of cores (4) confirmed: " $cores.NumberOfCores " cores installed." -ForegroundColor Green
         $script:HwCoresCheckPassed = $true
@@ -113,9 +113,7 @@ function Invoke-HardwareCheck {
 
     ########## Checking minimum RAM requirements */
     Write-Host "`n`nCHECKING RAM..." -ForegroundColor Cyan
-
-    $InstalledRAM = Get-WmiObject -Class Win32_ComputerSystem
-    $RAMinGB = [Math]::Round(($InstalledRAM.TotalPhysicalMemory / 1GB), 2)
+    $RAMinGB = [Math]::Round((Get-CimInstance -Class Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
     if ($RAMinGB -ge 16.0) {
         Write-Host "+ Minimum RAM (16GB) confirmed: " $RAMinGB "GB installed." -ForegroundColor Green
         $script:hwRAMCheckPassed = $true
@@ -130,7 +128,7 @@ function Invoke-HardwareCheck {
     ########## Checking minimum disk drive requirements */
     Write-Host "`n`nCHECKING DISK TYPE & STORAGE..." -ForegroundColor Cyan
 
-    $AvailableDiskSpace = Get-WmiObject -Class Win32_LogicalDisk -Filter 'DriveType = 3' 
+    $AvailableDiskSpace = Get-CimInstance -Class Win32_LogicalDisk -Filter 'DriveType = 3' 
     $driveCount = 0;
     $ssdCount = 0;
     $DeviceDrives = $AvailableDiskSpace | Select-Object DeviceID, DeviceType, @{n = 'FreeSpace'; e = { [int]($_.FreeSpace / 1GB) } }, @{n = 'Size'; e = { [int]($_.Size / 1GB) } } 
@@ -173,23 +171,28 @@ function Invoke-OperatingSystemCheck {
 
     $OSVersion = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName)
     $OSProductName = $OSVersion.ProductName
-
-    switch ([System.Environment]::OSVersion.Version.Build) {
-        18362 { 
-            Write-Host "+ $OSProductName 1903 detected." -ForegroundColor Green
+    if ($OSProductName -match "Enterprise|Professional|Education") {
+        switch ([System.Environment]::OSVersion.Version.Build) {
+            18362 { 
+                Write-Host "+ $OSProductName 1903 detected." -ForegroundColor Green
+            }
+            18363 { 
+                Write-Host "+ $OSProductName 1909 detected." -ForegroundColor Green
+            }
+            19041 { 
+                Write-Host "+ $OSProductName 2004 detected." -ForegroundColor Green
+            }
+            19042 { 
+                Write-Host "+ $OSProductName 20H2 detected." -ForegroundColor Green
+            }
+            Default { 
+                $script:OSCheckPassed = $false 
+            }
         }
-        18363 { 
-            Write-Host "+ $OSProductName 1909 detected." -ForegroundColor Green
-        }
-        19041 { 
-            Write-Host "+ $OSProductName 2004 detected." -ForegroundColor Green
-        }
-        19042 { 
-            Write-Host "+ $OSProductName 20H2 detected." -ForegroundColor Green
-        }
-        Default { 
-            $script:OSCheckPassed = $false 
-        }
+    }
+    else {
+        Write-Host "X $OSProductName detected.`n`  > Virtualization cannot be enabled on this OS. (Windows 10 Enterprise, Professional, or Education required." -ForegroundColor Red
+        $script:OSCheckPassed = $false 
     }
 
     if ($script:OSCheckPassed) {
@@ -220,31 +223,28 @@ function Invoke-OperatingSystemCheck {
         $script:hyperVEnabled = $true
     }
     else {
-        Write-Host "X The 'Microsoft-Hyper-V' feature is disabled.  Consider enabling using 'Enable-WindowsOptionalFeature -Online -FeatureName -All'." -ForegroundColor Red
+        Write-Host "X The 'Microsoft-Hyper-V' feature is disabled." -ForegroundColor Red
     }
 
     ########## Check that IIS is turned OFF  */
     Write-Host "`n`nDETECTING IIS RUNNING STATE..." -ForegroundColor Cyan
 
-    $vm = "localhost";
-    $iis = Get-WmiObject Win32_Service -ComputerName $vm -Filter "name='IISADMIN'"
-
+    $iis = (Get-CimInstance Win32_Service -Filter "Name='W3svc'").State
     if ($iis.State -eq "Running") {
-        Write-Host "X IIS is running on $vm.  Turn off IIS." -ForegroundColor Red
+        Write-Host "X IIS is running.  Turn off IIS." -ForegroundColor Red
     } 
     else {
         $script:IISOffCheckPassed = $true
-        Write-Host "+ IIS not running on $vm." -ForegroundColor Green
+        Write-Host "+ IIS not running." -ForegroundColor Green
     }
 }
 
 function Invoke-SoftwareCheck {
     ########## Check that Docker in installed  */
     Write-Host "`n`nVERIFYING DOCKER DESKTOP IS INSTALLED..." -ForegroundColor Cyan
-    $AvailableDiskSpace = Get-WmiObject -Class Win32_LogicalDisk -Filter 'DriveType = 3' 
+    $AvailableDiskSpace = Get-CimInstance -Class Win32_LogicalDisk -Filter 'DriveType = 3' 
     $DeviceDrives = $AvailableDiskSpace | Select-Object DeviceID 
     foreach ($drive in $DeviceDrives) {
-
         $dockerProgramFilesPath = "$($drive.DeviceID)\Program Files\Docker";
         if (Test-Path -Path $dockerProgramFilesPath) {
             Write-Host "+ Docker found installed at '$dockerProgramFilesPath'" -ForegroundColor Green
@@ -259,27 +259,32 @@ function Invoke-SoftwareCheck {
             }
         }
 
-        if($script:dockerInstalled -eq $true){
+        if ($script:dockerInstalled -eq $true) {
             $dockerProgramFilesPath = "$($drive.DeviceID)\Program Files\Docker";
             if (Test-Path -Path $dockerProgramFilesPath) {
                 $dnsSetting = (Get-Content "$($drive.DeviceID)\ProgramData\Docker\config\daemon.json" | ConvertFrom-Json | Select-Object dns).dns 
-                if(($dnsSetting| Measure-Object).Count -gt 0){
-                    if($dnsSetting -match "8.8.8.8"){
+                if (($dnsSetting | Measure-Object).Count -gt 0) {
+                    if ($dnsSetting -match "8.8.8.8") {
                         Write-Host "+ Docker DNS is set to Google's public DNS server:  $dnsSetting"  -ForegroundColor Green
-                    }else {
+                    }
+                    else {
                         Write-Host "- Docker's '$($drive.DeviceID)\ProgramData\Docker\config\daemon.json' configuration is not set to Google's public DNS server: 8.8.8.8.`nCurrent setting:  $dnsSetting" -ForegroundColor Yellow
                     }
                 }
             }
         }
     }
+    if ($script:dockerInstalled -eq $false) {
+        Write-Host "X Docker does not appear to be installed." -ForegroundColor Red
+    }
+
     ########## Check if Docker services are running  */
     Write-Host "`n`nVERIFYING DOCKER SERVICES ARE RUNNING..." -ForegroundColor Cyan
 
     if ($script:dockerInstalled = $true) {
         $DockerDesktopServiceName = "com.docker.service"
         try {
-            $dockerDesktopService = Get-Service -Name $DockerDesktopServiceName
+            $dockerDesktopService = Get-Service -Name $DockerDesktopServiceName -ErrorAction SilentlyContinue
             if ($dockerDesktopService.Status -eq "Running") {
                 Write-Host "+ Docker Desktop service is running." -ForegroundColor Green
                 $script:dockerRunning = $true
@@ -315,7 +320,8 @@ function Invoke-SoftwareCheck {
             if (((docker version) | Where-Object { $_ -match "linux" }).count) {
                 Write-Host "X Docker Desktop is currently configured for Linux containers. Switch to Windows Containers." -ForegroundColor Red
                 $script:dockerRunning = $false
-            }else{
+            }
+            else {
                 Write-Host "+ Docker Desktop is currently configured for Windows Containers." -ForegroundColor Green
             }
         }
@@ -425,33 +431,37 @@ function Install-Mkcert {
 }
 
 function Invoke-SitecoreDockerToolsCheck {
-    if(((Get-PSRepository -Name SitecoreGallery) | Measure-Object).Count -gt 0){
+    if (((Get-PSRepository -Name SitecoreGallery -ErrorAction SilentlyContinue) | Measure-Object).Count -gt 0) {
         Write-Host "+ 'SitecoreGallery' successfully registered." -ForegroundColor Green
-    }else {
+    }
+    else {
         Write-Host "+ 'SitecoreGallery' is not registered" -ForegroundColor Yellow
     }
 
-    if((Get-InstalledModule SitecoreDockerTools | Measure-Object).Count -gt 0){
+    if ((Get-InstalledModule SitecoreDockerTools -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
         Write-Host "+ 'SitecoreDockerTools' PowerShell Module is installed." -ForegroundColor Green
         $script:psModuleScDockerTools = $true
-    }else{
+    }
+    else {
         Write-Host "+ 'SitecoreDockerTools' PowerShell Module is not installed." -ForegroundColor Yellow
         $script:psModuleScDockerTools = $false
     }
 }
 
-function Install-SitecoreDockerTools{
-    if(((Get-PSRepository -Name SitecoreGallery) | Measure-Object).Count -gt 0){
+function Install-SitecoreDockerTools {
+    if (((Get-PSRepository -Name SitecoreGallery -ErrorAction SilentlyContinue) | Measure-Object).Count -gt 0) {
         Write-Host "`n+ 'SitecoreGallery' successfully registered.`n" -ForegroundColor Green
-    }else {
+    }
+    else {
         Write-Host "`n+ 'Registering 'SitecoreGallery' with SourceLocation set to 'https://sitecore.myget.org/F/sc-powershell/api/v2'... " -ForegroundColor Yellow
         Register-PSRepository -Name SitecoreGallery -SourceLocation https://sitecore.myget.org/F/sc-powershell/api/v2
         Write-Host "+ 'SitecoreGallery' successfully registered.`n" -ForegroundColor Green
     }
 
-    if((Get-InstalledModule SitecoreDockerTools | Measure-Object).Count -gt 0){
+    if ((Get-InstalledModule SitecoreDockerTools -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
         Write-Host "+ 'SitecoreDockerTools' PowerShell Module is installed." -ForegroundColor Green
-    }else{
+    }
+    else {
         Write-Host "+ 'SitecoreDockerTools' PowerShell Module is installing..." -ForegroundColor Yellow
         Install-Module SitecoreDockerTools
         Write-Host "+ 'SitecoreDockerTools' PowerShell Module is installed." -ForegroundColor Green
@@ -460,7 +470,7 @@ function Install-SitecoreDockerTools{
     Import-Module SitecoreDockerTools
 }
 
-function Enable-ContainersFeature{
+function Enable-ContainersFeature {
     Enable-WindowsOptionalFeature -Online -FeatureName containers -All
 }
 
@@ -475,7 +485,7 @@ function Invoke-SitecoreContainerGuideDownload {
     Invoke-Pause
 }
 
-function Invoke-SitecoreContainerPackageDownload{
+function Invoke-SitecoreContainerPackageDownload {
     Write-Host "Downloading 'Initial release of SXP Sitecore Container Deployment for Sitecore 10.1 (10.1.0.005207.309).zip' to $((Get-Location).Path).`n" -ForegroundColor Magenta
     Invoke-WebRequest -Uri "https://github.com/Sitecore/container-deployment/releases/download/sxp%2F10.1.0.005207.309/SitecoreContainerDeployment.10.1.0.005207.309.zip" -OutFile ".\SitecoreContainerDeployment.10.1.0.005207.309.zip"
     Invoke-Item (Get-Location).Path
@@ -587,7 +597,7 @@ $script:tcpPortsAvailable = $false
 $script:psModuleScDockerTools = $false
 
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-if(!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
+if (!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
     exit
 }
