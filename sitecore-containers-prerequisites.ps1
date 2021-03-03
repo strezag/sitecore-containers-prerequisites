@@ -7,8 +7,8 @@
     Quickly verify Sitecore Container:
         - Hardware requirements (CPU, RAM, DISK STORAGE and TYPES)
         - Operating system compatibility (OS Build Version, Hyper-V/Containers Feature Check, IIS Running State)
-        - Software requirements (Docker Desktop, Docker engine OS type Linux vs Windows Containers, DNS setting, SitecoreDockerTools PSModule)
-        - Network Port Check (443, 8079, 8984, 14330)
+        - Software requirements (Docker Desktop, Docker engine OS type Linux vs Windows Containers, DNS setting, Docker network access, SitecoreDockerTools PSModule)
+        - Host Network Port Check (443, 8079, 8984, 14330)
 
     Download and Install required software:
         - Chocolatey
@@ -324,6 +324,20 @@ function Invoke-SoftwareCheck {
             else {
                 Write-Host "+ Docker Desktop is currently configured for Windows Containers." -ForegroundColor Green
             }
+        }
+    }
+
+    if ($script:dockerInstalled -and $script:dockerRunning) {
+        ########## Check if Docker services are running  */
+        Write-Host "`n`nVERIFYING DOCKER NETWORK ACCESS..." -ForegroundColor Cyan
+
+        $dockerNetworkSuccess = (& docker run mcr.microsoft.com/powershell:lts-nanoserver-1809 pwsh.exe -Command Test-Connection -TcpPort 80 -TargetName nuget.org)
+        if ($dockerNetworkSuccess -eq "True") {
+            Write-Host "+ Docker Desktop can successfully reach the internet." -ForegroundColor Green
+        }
+        else {
+            Write-Host "X Docker Desktop cannot reach the internet. Check Docker network configuration and the InterfaceMetric values on your network adapter." -ForegroundColor Red
+            Write-Host "https://github.com/docker/for-win/issues/2760#issuecomment-430889666" -ForegroundColor Red
         }
     }
 
