@@ -237,6 +237,22 @@ function Invoke-OperatingSystemCheck {
         $script:IISOffCheckPassed = $true
         Write-Host "+ IIS not running." -ForegroundColor Green
     }
+
+    ########## Check for problematic cbfsconnect2017 driver  */
+    Write-Host "`n`nDETECTING CBFSCONNECT2017 DRIVER VERSION..." -ForegroundColor Cyan
+    $driver = Get-CimInstance Win32_SystemDriver -filter "name='cbfsconnect2017'"
+    if (-not $driver) {
+        Write-Host "+ cbfsconnect2017 not installed (this is good)." -ForegroundColor Green
+    }
+    else {
+        $driverFile = Get-Item $driver.PathName.Substring(4) # PathName has a \??\ prefix
+        if ($driverFile.VersionInfo.FileVersionRaw.Build -lt 27) {
+            Write-Host "X You have a conflicting cbfsconnect2017 driver version from Box or other software. Install software with an updated driver version." -ForegroundColor Red
+            Write-Host "More information: https://github.com/docker/for-win/issues/3884" -ForegroundColor Red
+        } else {
+            Write-Host "+ cbfsconnect2017 driver is compatible." -ForegroundColor Green
+        }
+    }
 }
 
 function Invoke-SoftwareCheck {
