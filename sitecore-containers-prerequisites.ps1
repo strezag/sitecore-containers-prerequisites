@@ -171,7 +171,7 @@ function Invoke-OperatingSystemCheck {
 
     $OSVersion = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName)
     $OSProductName = $OSVersion.ProductName
-    if ($OSProductName -match "Enterprise|Professional|Education") {
+    if ($OSProductName -match "Enterprise|Professional|Education|Pro") {
         switch ([System.Environment]::OSVersion.Version.Build) {
             18362 { 
                 Write-Host "+ $OSProductName 1903 detected." -ForegroundColor Green
