@@ -632,4 +632,9 @@ if (!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adminis
     exit
 }
 
+if($host.name -eq "Windows PowerShell ISE Host"){
+    Write-Host "PowerShell ISE is not supported.  Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
+    exit
+}
+
 Set-Menu
