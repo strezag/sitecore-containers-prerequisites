@@ -229,7 +229,7 @@ function Invoke-OperatingSystemCheck {
     ########## Check that IIS is turned OFF  */
     Write-Host "`n`nDETECTING IIS RUNNING STATE..." -ForegroundColor Cyan
 
-    $iis = (Get-CimInstance Win32_Service -Filter "Name='W3svc'").State
+    $iis = (Get-CimInstance Win32_Service -Filter "Name='W3svc'")
     if ($iis.State -eq "Running") {
         Write-Host "X IIS is running.  Turn off IIS." -ForegroundColor Red
     } 
