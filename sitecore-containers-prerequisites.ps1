@@ -360,6 +360,10 @@ function Invoke-SoftwareCheck {
     ########## Check for SitecoreDockerTools PSModule install status  */
     Write-Host "`n`nVERIFYING 'SitecoreDockerTools' POWERSHELL MODULE IS INSTALLED..." -ForegroundColor Cyan
     Invoke-SitecoreDockerToolsCheck
+
+    ########## Check for Sitecore License persisted in user environment variable */
+    Write-Host "`n`nCHECKING FOR PERSISTENT SITECORE LICENSE USER ENVIRONMENT VARIABLE (REQUIRES RUN IN WINDOWS TERMINAL OR POWERSHELL)..." -ForegroundColor Cyan
+    Invoke-SitecoreLicenseUserVariableCheck
 }
 
 function Invoke-NetworkPortCheck {
@@ -528,6 +532,31 @@ function Invoke-OpenContainerDocs {
     Invoke-Pause
 }
 
+function Invoke-SitecoreLicenseUserVariableCheck {
+    $userVariable = [Environment]::GetEnvironmentVariable("SITECORE_LICENSE", "User")
+    if (! $userVariable) {
+        Write-Host "+ No Sitecore License in a persisted user environment variable found. This works well when SITECORE_LICENSE variable is set dynamically on container up." -ForegroundColor Green
+    }
+    else {
+        Write-Host "+ A Sitecore license is stored in a persisted user environment variable. This may interfere with solutions using a license loaded dynamically when starting containers since persisted variables take precedence. Consider running Remove Sitecore License User Variable to resolve that issue on solutions." -ForegroundColor Yellow
+        Write-Host "+ Sitecore License user variable found: $($userVariable)"
+    }
+    Invoke-Pause
+}
+
+function Remove-SitecoreLicenseUserVariable {
+    $userVariable = [Environment]::GetEnvironmentVariable("SITECORE_LICENSE", "User")
+    if (! $userVariable) {
+        Write-Host "+ No Sitecore License user variable found to remove" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "+ Removing Sitecore License user variable: $($userVariable)"
+        [Environment]::SetEnvironmentVariable("SITECORE_LICENSE", [NullString]::Value, "User")
+        Write-Host "+ User variable removed. Log out/in to Windows for environment variable changes to take effect." -ForegroundColor Green
+    }
+    Invoke-Pause
+}
+
 function Invoke-Pause {
     Write-Host -NoNewLine "`n`nPress any key to continue..." -ForegroundColor Yellow
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
@@ -535,7 +564,7 @@ function Invoke-Pause {
 }
 
 function Set-Menu {
-    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", "Install mkcert", "Install SitecoreDockerTools PowerShell Module", "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", "Download 10.1.0 Developer Installation Guide (PDF)", "Download 10.1.0 Sitecore Container Package (ZIP)", "Open Sitecore Container Docs" , 'Exit')
+    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", "Install mkcert", "Install SitecoreDockerTools PowerShell Module", "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", "Download 10.1.0 Developer Installation Guide (PDF)", "Download 10.1.0 Sitecore Container Package (ZIP)", "Open Sitecore Container Docs", "Remove Sitecore License in Persisted User Environment Variable", 'Exit')
 
     $menuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $menuOptions
     
@@ -609,6 +638,10 @@ function Set-Menu {
         Invoke-OpenContainerDocs
     }
     elseif ($menuSelection -eq 14) {
+        Write-Host "`nRemove Sitecore License in Persisted User Environment Variable" -ForegroundColor Magenta
+        Remove-SitecoreLicenseUserVariable
+    }
+    elseif ($menuSelection -eq 15) {
         Write-Host "`nBye!" -ForegroundColor Magenta
         exit
     }
