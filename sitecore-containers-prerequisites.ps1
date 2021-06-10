@@ -278,14 +278,20 @@ function Invoke-SoftwareCheck {
         if ($script:dockerInstalled -eq $true) {
             $dockerProgramFilesPath = "$($drive.DeviceID)\Program Files\Docker";
             if (Test-Path -Path $dockerProgramFilesPath) {
-                $dnsSetting = (Get-Content "$($drive.DeviceID)\ProgramData\Docker\config\daemon.json" | ConvertFrom-Json | Select-Object dns).dns 
-                if (($dnsSetting | Measure-Object).Count -gt 0) {
-                    if ($dnsSetting -match "8.8.8.8") {
-                        Write-Host "+ Docker DNS is set to Google's public DNS server:  $dnsSetting"  -ForegroundColor Green
+                $daemonJsonFile = "$($drive.DeviceID)\ProgramData\Docker\config\daemon.json"
+                if (Test-path -Path $daemonJsonFile) {
+                    $dnsSetting = (Get-Content $daemonJsonFile | ConvertFrom-Json | Select-Object dns).dns 
+                    if (($dnsSetting | Measure-Object).Count -gt 0) {
+                        if ($dnsSetting -match "8.8.8.8") {
+                            Write-Host "+ Docker DNS is set to Google's public DNS server:  $dnsSetting"  -ForegroundColor Green
+                        }
+                        else {
+                            Write-Host "- Docker's '$($drive.DeviceID)\ProgramData\Docker\config\daemon.json' configuration is not set to Google's public DNS server: 8.8.8.8.`nCurrent setting:  $dnsSetting" -ForegroundColor Yellow
+                        }
                     }
-                    else {
-                        Write-Host "- Docker's '$($drive.DeviceID)\ProgramData\Docker\config\daemon.json' configuration is not set to Google's public DNS server: 8.8.8.8.`nCurrent setting:  $dnsSetting" -ForegroundColor Yellow
-                    }
+                }                
+                else {
+                    Write-Host "- Cannot check DNS settings because cannot find the settings file path '$($daemonJsonFile)'. Try making sure you are running Docker Desktop in Windows Containers mode via the GUI or running '$($drive.DeviceID)\Program Files\docker\docker\DockerCLI.exe -SwitchDaemon' if you cannot access the Docker tray icon." -ForegroundColor Yellow
                 }
             }
         }
