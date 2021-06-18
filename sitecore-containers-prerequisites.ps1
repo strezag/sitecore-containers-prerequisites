@@ -185,6 +185,9 @@ function Invoke-OperatingSystemCheck {
             19042 { 
                 Write-Host "+ $OSProductName 20H2 detected." -ForegroundColor Green
             }
+            19043 {
+                Write-Host "+ $OSProductName 21H1 detected. " -ForegroundColor Green
+            }
             Default { 
                 $script:OSCheckPassed = $false 
             }
@@ -249,7 +252,8 @@ function Invoke-OperatingSystemCheck {
         if ($driverFile.VersionInfo.FileVersionRaw.Build -lt 27) {
             Write-Host "X You have a conflicting cbfsconnect2017 driver version from Box or other software. Install software with an updated driver version." -ForegroundColor Red
             Write-Host "More information: https://github.com/docker/for-win/issues/3884" -ForegroundColor Red
-        } else {
+        }
+        else {
             Write-Host "+ cbfsconnect2017 driver is compatible." -ForegroundColor Green
         }
     }
@@ -671,7 +675,7 @@ if (!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adminis
     exit
 }
 
-if($host.name -eq "Windows PowerShell ISE Host"){
+if ($host.name -eq "Windows PowerShell ISE Host") {
     Write-Host "PowerShell ISE is not supported.  Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
     exit
 }
