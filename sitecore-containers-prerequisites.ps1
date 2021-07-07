@@ -285,13 +285,11 @@ function Invoke-SoftwareCheck {
                 $daemonJsonFile = "$($drive.DeviceID)\ProgramData\Docker\config\daemon.json"
                 if (Test-path -Path $daemonJsonFile) {
                     $dnsSetting = (Get-Content $daemonJsonFile | ConvertFrom-Json | Select-Object dns).dns 
-                    if (($dnsSetting | Measure-Object).Count -gt 0) {
-                        if ($dnsSetting -match "8.8.8.8") {
-                            Write-Host "+ Docker DNS is set to Google's public DNS server:  $dnsSetting"  -ForegroundColor Green
-                        }
-                        else {
-                            Write-Host "- Docker's '$($drive.DeviceID)\ProgramData\Docker\config\daemon.json' configuration is not set to Google's public DNS server: 8.8.8.8.`nCurrent setting:  $dnsSetting" -ForegroundColor Yellow
-                        }
+                    if (($dnsSetting | Measure-Object).Count -gt 0 -and (($dnsSetting -match "8.8.8.8") -or ($dnsSetting -match "1.1.1.1"))) {
+                        Write-Host "+ Docker DNS is set to Google's and/or CloudFlare's public DNS server(s):  $dnsSetting"  -ForegroundColor Green
+                    }
+                    else {
+                        Write-Host "- Docker's '$($drive.DeviceID)\ProgramData\Docker\config\daemon.json' configuration is not set to Google's and/or CloudFlare's public DNS server(s): 8.8.8.8 or 1.1.1.1.`nCurrent setting:  $dnsSetting `nNote: This may not be required if network configuration works well or if DNS is specfied in docker or docker-compose." -ForegroundColor Yellow
                     }
                 }                
                 else {
@@ -357,13 +355,22 @@ function Invoke-SoftwareCheck {
         ########## Check if Docker services are running  */
         Write-Host "`n`nVERIFYING DOCKER NETWORK ACCESS..." -ForegroundColor Cyan
 
-        $dockerNetworkSuccess = (& docker run mcr.microsoft.com/powershell:lts-nanoserver-1809 pwsh.exe -Command Test-Connection -TcpPort 80 -TargetName nuget.org)
+        Write-Host "`Trying without forced DNS..." -ForegroundColor Cyan
+        $dockerNetworkSuccess = (& docker run --rm mcr.microsoft.com/powershell:lts-nanoserver-1809 pwsh.exe -Command Test-Connection -TcpPort 80 -TargetName nuget.org)
         if ($dockerNetworkSuccess -eq "True") {
-            Write-Host "+ Docker Desktop can successfully reach the internet." -ForegroundColor Green
+            Write-Host "+ Docker Desktop can successfully reach the internet with current workstation and/or DNS settings." -ForegroundColor Green
         }
         else {
-            Write-Host "X Docker Desktop cannot reach the internet. Check Docker network configuration and the InterfaceMetric values on your network adapter." -ForegroundColor Red
-            Write-Host "https://github.com/docker/for-win/issues/2760#issuecomment-430889666" -ForegroundColor Red
+            Write-Host "`Trying again with forced DNS (okay if test above without forced DNS failed as long as this next, forced DNS test works)..." -ForegroundColor Cyan
+            $dockerNetworkSuccess = (& docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 mcr.microsoft.com/powershell:lts-nanoserver-1809 pwsh.exe -Command Test-Connection -TcpPort 80 -TargetName nuget.org)
+            if ($dockerNetworkSuccess -eq "True")
+            {
+                Write-Host "+ Docker Desktop can successfully reach the internet with forced Google + CloudFlare Public DNS settings. This may mean that you need to use similar settings in your Docker daemon.json (for all solutions) or the docker-compose.yml for your solution(s)." -ForegroundColor Yellow
+            }
+            else {
+                Write-Host "X Docker Desktop cannot reach the internet. Check Docker network configuration and the InterfaceMetric values on your network adapter." -ForegroundColor Red
+                Write-Host "https://github.com/docker/for-win/issues/2760#issuecomment-430889666" -ForegroundColor Red
+            }
         }
     }
 
