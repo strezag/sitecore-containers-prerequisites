@@ -530,19 +530,86 @@ function Enable-HyperVFeature {
 }
 
 function Invoke-SitecoreContainerGuideDownload {
-    Write-Host "Downloading 'Installation Guide for Developer Workstation with Containers (10.1) (10.1.0.005207.309)' to $((Get-Location).Path).`n" -ForegroundColor Magenta
-    Invoke-WebRequest -Uri "https://sitecoredev.azureedge.net/~/media/F53BECFEBDC64C8695EDF60D4E435AEA.ashx?date=20210224T164409" -OutFile ".\SitecoreContainerDeployment.10.1.0.005207.309.pdf"
-    Invoke-Item (Get-Location).Path
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $True)] [String] $Version
+    )
+
+    if($Version -eq "10.0.0"){
+        Invoke-GuideDownload -Version "10.0.0" -Url "https://sitecoredev.azureedge.net/~/media/184E63BB1E0547C682C9170FEE95BA29.ashx?date=20200901T125111" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/100/Sitecore_Experience_Platform_100.aspx"
+    }elseif ($Version -eq "10.0.1") {
+        Invoke-GuideDownload -Version "10.0.1" -Url "https://sitecoredev.azureedge.net/~/media/26D26751543C448A968E2BDB2BD16D60.ashx?date=20210702T101725" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/100/Sitecore_Experience_Platform_100_Update1.aspx"
+    }elseif ($Version -eq "10.0.2") {
+        Invoke-GuideDownload -Version "10.0.2" -Url "https://sitecoredev.azureedge.net/~/media/D81C4664C09A41DF993D95AB44C4A6D3.ashx?date=20210630T131208" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/100/Sitecore_Experience_Platform_100_Update2.aspx"
+    }elseif ($Version -eq "10.1.0") {
+        Invoke-GuideDownload -Version "10.1.0" -Url "https://sitecoredev.azureedge.net/~/media/F53BECFEBDC64C8695EDF60D4E435AEA.ashx?date=20210224T164409" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/101/Sitecore_Experience_Platform_101.aspx"
+    }elseif ($Version -eq "10.1.1") {
+        Invoke-GuideDownload -Version "10.1.1" -Url "https://sitecoredev.azureedge.net/~/media/6FDE5840A6C0496E982A5C33F4DB3AF8.ashx?date=20210609T210507" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/101/Sitecore_Experience_Platform_101_Update1.aspx"
+    }
+}
+
+function Invoke-GuideDownload {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $True)] [String] $Version,
+        [Parameter(Mandatory = $True)] [String] $Url,
+        [Parameter(Mandatory = $True)] [String] $SitecoreReleasePage
+
+    )
+    Start-Process $SitecoreReleasePage
+    $FileNameFormat = "Installation Guide_for_Sitecore_XP_Developer_Workstation_with_Containers.{0}.pdf"
+    $FileName = $([string]::Format($FileNameFormat, $Version))
+    if(!(Test-Path "$((Get-Location).Path)\$FileName")){
+        Write-Host "`nDownloading 'Installation Guide for Developer Workstation with Containers ($Version)' to $((Get-Location).Path).`n" -ForegroundColor Magenta
+        Invoke-WebRequest -Uri $Url -OutFile ".\$FileName"
+        Invoke-Item "$((Get-Location).Path)\$FileName"
+    }else{
+        Write-Host "`n'$FileName' is already downloaded.  `nInvoking PDF..." $((Get-Location).Path)\$FileName".`n" -ForegroundColor Magenta
+        Invoke-Item "$((Get-Location).Path)\$FileName"
+    }
+
     Invoke-Pause
 }
 
 function Invoke-SitecoreContainerPackageDownload {
-    Write-Host "Downloading 'Initial release of SXP Sitecore Container Deployment for Sitecore 10.1 (10.1.0.005207.309).zip' to $((Get-Location).Path).`n" -ForegroundColor Magenta
-    Invoke-WebRequest -Uri "https://github.com/Sitecore/container-deployment/releases/download/sxp%2F10.1.0.005207.309/SitecoreContainerDeployment.10.1.0.005207.309.zip" -OutFile ".\SitecoreContainerDeployment.10.1.0.005207.309.zip"
-    Invoke-Item (Get-Location).Path
-    Invoke-Pause
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $True)] [String] $Version
+    )
+
+    if($Version -eq "10.0.0"){
+        Invoke-PackageDownload -FullVersion "10.0.0.004346.184"
+    }elseif ($Version -eq "10.0.1") {
+        Invoke-PackageDownload -FullVersion "10.0.1.004842.221"
+    }elseif ($Version -eq "10.0.2") {
+        Invoke-PackageDownload -FullVersion "10.0.1.004842.266"
+    }elseif ($Version -eq "10.1.0") {
+        Invoke-PackageDownload -FullVersion "10.1.0.005207.309"
+    }elseif ($Version -eq "10.1.1") {
+        Invoke-PackageDownload -FullVersion "10.1.0.005207.309"
+    }
 }
 
+function Invoke-PackageDownload{
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $True)]
+        [String]
+        $FullVersion
+    )
+    $LocalFileNameFormat = "SXP_Sitecore_Container_Deployment.{0}.zip"
+    $ReleasePageUrlFormat = "https://github.com/Sitecore/container-deployment/releases/tag/sxp%2F{0}"
+    $RemoteFileUrlFormat = "https://github.com/Sitecore/container-deployment/releases/download/sxp%2F{0}/SitecoreContainerDeployment.{1}.zip"
+
+    $FileName = $([string]::Format($LocalFileNameFormat, $FullVersion))
+    $FileUrl = $([string]::Format($RemoteFileUrlFormat, $FullVersion, $FullVersion))
+    $ReleasePageUrl = $([string]::Format($ReleasePageUrlFormat, $FullVersion))
+    Write-Host "Downloading '$FileName' to $((Get-Location).Path).`n" -ForegroundColor Magenta
+    Invoke-WebRequest -Uri $FileUrl -OutFile ".\$FileName"
+    Invoke-Item "$((Get-Location).Path)\$FileName"
+    Start-Process $ReleasePageUrl
+    Invoke-Pause
+}
 function Invoke-OpenContainerDocs {
     $Url = "https://doc.sitecore.com/developers/101/developer-tools/en/containers-in-sitecore-development.html"
     Start-Process $Url
@@ -581,7 +648,7 @@ function Invoke-Pause {
 }
 
 function Set-Menu {
-    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", "Install mkcert", "Install SitecoreDockerTools PowerShell Module", "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", "Download 10.1.0 Developer Installation Guide (PDF)", "Download 10.1.0 Sitecore Container Package (ZIP)", "Open Sitecore Container Docs", "Remove Sitecore License in Persisted User Environment Variable", 'Exit')
+    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", "Install mkcert", "Install SitecoreDockerTools PowerShell Module", "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", "Download 10.x.x Developer Installation Guide (PDF)", "Download 10.x.x Sitecore Container Package (ZIP)", "Open Sitecore Container Docs", "Remove Sitecore License in Persisted User Environment Variable", 'Exit')
 
     $menuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $menuOptions
     
@@ -643,12 +710,55 @@ function Set-Menu {
         Invoke-Pause
     }
     elseif ($menuSelection -eq 11) {
-        Write-Host "`nDownloading 10.1.0 Developer Workstation Container Installation Guide" -ForegroundColor Magenta
-        Invoke-SitecoreContainerGuideDownload
+        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', 'Exit')
+        $innerMenuSelection = Invoke-Menu -MenuTitle "**********************************************`nDownload Developer Workstation Container Installation Guide`n**********************************************" -MenuOptions $innerMenuOptions
+        if ($innerMenuSelection -eq 0) {
+            Write-Host "`nOpening Sitecore 10.0.0 Release Page" -ForegroundColor Magenta
+            Invoke-SitecoreContainerGuideDownload -Version "10.0.0"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 1) {
+            Write-Host "`nOpening Sitecore 10.0.1 Release Page" -ForegroundColor Magenta
+            Invoke-SitecoreContainerGuideDownload -Version "10.0.1"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 2) {
+            Write-Host "`nOpening Sitecore 10.0.2 Release Page" -ForegroundColor Magenta
+            Invoke-SitecoreContainerGuideDownload -Version "10.0.2"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 3) {
+            Write-Host "`nOpening Sitecore 10.1.0 Release Page" -ForegroundColor Magenta
+            Invoke-SitecoreContainerGuideDownload -Version "10.1.0"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 4) {
+            Write-Host "`nOpening Sitecore 10.1.1 Release Page" -ForegroundColor Magenta
+            Invoke-SitecoreContainerGuideDownload -Version "10.1.1"
+            Invoke-Pause
+        }
     }
     elseif ($menuSelection -eq 12) {
-        Write-Host "`nDownloading 10.1.0 Container Deployment Package" -ForegroundColor Magenta
-        Invoke-SitecoreContainerPackageDownload
+        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', 'Exit')
+        $innerMenuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $innerMenuOptions
+
+        if ($innerMenuSelection -eq 0) {
+            Write-Host "`nDownloading 10.0.0 Container Deployment Package" -ForegroundColor Magenta
+            Invoke-SitecoreContainerPackageDownload -Version "10.0.0"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 1) {
+            Write-Host "`nDownloading 10.0.1 Container Deployment Package" -ForegroundColor Magenta
+            Invoke-SitecoreContainerPackageDownload -Version "10.0.1"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 2) {
+            Write-Host "`nDownloading 10.0.2 Container Deployment Package" -ForegroundColor Magenta
+            Invoke-SitecoreContainerPackageDownload -Version "10.0.2"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 3) {
+            Write-Host "`nDownloading 10.1.0 Container Deployment Package" -ForegroundColor Magenta
+            Invoke-SitecoreContainerPackageDownload -Version "10.1.0"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 4) {
+            Write-Host "`nDownloading 10.1.1 Container Deployment Package" -ForegroundColor Magenta
+            Invoke-SitecoreContainerPackageDownload -Version "10.1.1"
+            Invoke-Pause
+        }
     }
     elseif ($menuSelection -eq 13) {
         Write-Host "`nOpen 10.1.0 Container Docs" -ForegroundColor Magenta
