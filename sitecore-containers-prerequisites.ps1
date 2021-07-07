@@ -586,6 +586,8 @@ function Invoke-SitecoreContainerPackageDownload {
     }elseif ($Version -eq "10.1.0") {
         Invoke-PackageDownload -FullVersion "10.1.0.005207.309"
     }elseif ($Version -eq "10.1.1") {
+        # Remove as needed
+        Write-Host "`n* As of this update (07/07/2021), the 10.1.1 container package has not been made available. `n`t>Downloading 10.1.0 instead.`n" -ForegroundColor Yellow
         Invoke-PackageDownload -FullVersion "10.1.0.005207.309"
     }
 }
@@ -711,7 +713,7 @@ function Set-Menu {
     }
     elseif ($menuSelection -eq 11) {
         $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', 'Exit')
-        $innerMenuSelection = Invoke-Menu -MenuTitle "**********************************************`nDownload Developer Workstation Container Installation Guide`n**********************************************" -MenuOptions $innerMenuOptions
+        $innerMenuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $innerMenuOptions
         if ($innerMenuSelection -eq 0) {
             Write-Host "`nOpening Sitecore 10.0.0 Release Page" -ForegroundColor Magenta
             Invoke-SitecoreContainerGuideDownload -Version "10.0.0"
