@@ -47,6 +47,7 @@ function Invoke-Menu () {
         
         Write-Host "`n$MenuTitle`n" -ForegroundColor Cyan
         Write-Host "Script developed by @GabeStreza`nhttps://streza.dev`n" -ForegroundColor Magenta
+        Write-Host "Enhanced by the Sitecore community `n" -ForegroundColor Magenta
         Write-Host "Sitecore Container Docs`n > https://containers.doc.sitecore.com/`n" -ForegroundColor DarkCyan
 
         for ($i = 0; $i -le $MaxValue; $i++) {
@@ -545,6 +546,10 @@ function Invoke-SitecoreContainerGuideDownload {
         Invoke-GuideDownload -Version "10.1.0" -Url "https://sitecoredev.azureedge.net/~/media/F53BECFEBDC64C8695EDF60D4E435AEA.ashx?date=20210224T164409" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/101/Sitecore_Experience_Platform_101.aspx"
     }elseif ($Version -eq "10.1.1") {
         Invoke-GuideDownload -Version "10.1.1" -Url "https://sitecoredev.azureedge.net/~/media/6FDE5840A6C0496E982A5C33F4DB3AF8.ashx?date=20210609T210507" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/101/Sitecore_Experience_Platform_101_Update1.aspx"
+    }elseif ($Version -eq "10.1.2") {
+        Invoke-GuideDownload -Version "10.1.2" -Url "https://sitecoredev.azureedge.net/~/media/FCD3AEA2014F4FCBA71DFE6FBC5475F3.ashx?date=20211008T145241" -SitecoreReleasePage "https://dev.sitecore.net/Downloads/Sitecore_Experience_Platform/101/Sitecore_Experience_Platform_101_Update2.aspx"
+    }elseif ($Version -eq "10.2.0") {
+        Invoke-GuideDownload -Version "10.2.0" -Url "https://sitecoredev.azureedge.net/~/media/AC62878E09234AC9BAA434FCCA463925.ashx?date=20211103T162237" -SitecoreReleasePage "https://dev.sitecore.net/Downloads/Sitecore_Experience_Platform/102/Sitecore_Experience_Platform_102.aspx"
     }
 }
 
@@ -586,9 +591,11 @@ function Invoke-SitecoreContainerPackageDownload {
     }elseif ($Version -eq "10.1.0") {
         Invoke-PackageDownload -FullVersion "10.1.0.005207.309"
     }elseif ($Version -eq "10.1.1") {
-        # Remove as needed
-        Write-Host "`n* As of this update (07/07/2021), the 10.1.1 container package has not been made available. `n`t>Downloading 10.1.0 instead.`n" -ForegroundColor Yellow
-        Invoke-PackageDownload -FullVersion "10.1.0.005207.309"
+        Invoke-PackageDownload -FullVersion "10.1.1.005862.645"
+    }elseif ($Version -eq "10.1.2") {
+        Invoke-PackageDownload -FullVersion "10.1.2.006578.651"
+    }elseif ($Version -eq "10.2.0") {
+        Invoke-PackageDownload -FullVersion "10.2.0.006766.683"
     }
 }
 
@@ -613,7 +620,13 @@ function Invoke-PackageDownload{
     Invoke-Pause
 }
 function Invoke-OpenContainerDocs {
-    $Url = "https://doc.sitecore.com/developers/101/developer-tools/en/containers-in-sitecore-development.html"
+    $Url = "https://doc.sitecore.com/en/developers/102/developer-tools/containers-in-sitecore-development.html"
+    Start-Process $Url
+    Invoke-Pause
+}
+
+function Invoke-SCPGithubRepo {
+    $Url = "https://github.com/strezag/sitecore-containers-prerequisites"
     Start-Process $Url
     Invoke-Pause
 }
@@ -650,7 +663,7 @@ function Invoke-Pause {
 }
 
 function Set-Menu {
-    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", "Install mkcert", "Install SitecoreDockerTools PowerShell Module", "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", "Download 10.x.x Developer Installation Guide (PDF)", "Download 10.x.x Sitecore Container Package (ZIP)", "Open Sitecore Container Docs", "Remove Sitecore License in Persisted User Environment Variable", 'Exit')
+    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", 'Install mkcert', 'Install SitecoreDockerTools PowerShell Module', "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", 'Download 10.x.x Developer Installation Guide (PDF)', 'Download 10.x.x Sitecore Container Package (ZIP)', 'Open Sitecore Container Docs', 'Remove Sitecore License in Persisted User Environment Variable', "Open 'sitecore-container-prerequisites' GitHub repository", 'Exit')
 
     $menuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $menuOptions
     
@@ -712,7 +725,7 @@ function Set-Menu {
         Invoke-Pause
     }
     elseif ($menuSelection -eq 11) {
-        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', 'Exit')
+        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', '10.1.2', '10.2.0', 'Exit')
         $innerMenuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $innerMenuOptions
         if ($innerMenuSelection -eq 0) {
             Write-Host "`nOpening Sitecore 10.0.0 Release Page" -ForegroundColor Magenta
@@ -734,10 +747,18 @@ function Set-Menu {
             Write-Host "`nOpening Sitecore 10.1.1 Release Page" -ForegroundColor Magenta
             Invoke-SitecoreContainerGuideDownload -Version "10.1.1"
             Invoke-Pause
+        }elseif ($innerMenuSelection -eq 5) {
+            Write-Host "`nOpening Sitecore 10.1.2 Release Page" -ForegroundColor Magenta
+            Invoke-SitecoreContainerGuideDownload -Version "10.1.2"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 6) {
+            Write-Host "`nOpening Sitecore 10.2.0 Release Page" -ForegroundColor Magenta
+            Invoke-SitecoreContainerGuideDownload -Version "10.2.0"
+            Invoke-Pause
         }
     }
     elseif ($menuSelection -eq 12) {
-        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', 'Exit')
+        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', '10.1.2', '10.2.0', 'Exit')
         $innerMenuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $innerMenuOptions
 
         if ($innerMenuSelection -eq 0) {
@@ -760,10 +781,18 @@ function Set-Menu {
             Write-Host "`nDownloading 10.1.1 Container Deployment Package" -ForegroundColor Magenta
             Invoke-SitecoreContainerPackageDownload -Version "10.1.1"
             Invoke-Pause
+        }elseif ($innerMenuSelection -eq 5) {
+            Write-Host "`nDownloading 10.1.2 Container Deployment Package" -ForegroundColor Magenta
+            Invoke-SitecoreContainerPackageDownload -Version "10.1.2"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 6) {
+            Write-Host "`nDownloading 10.2.0 Container Deployment Package" -ForegroundColor Magenta
+            Invoke-SitecoreContainerPackageDownload -Version "10.2.0"
+            Invoke-Pause
         }
     }
     elseif ($menuSelection -eq 13) {
-        Write-Host "`nOpen 10.1.0 Container Docs" -ForegroundColor Magenta
+        Write-Host "`nOpen 10.2.0 Container Docs" -ForegroundColor Magenta
         Invoke-OpenContainerDocs
     }
     elseif ($menuSelection -eq 14) {
@@ -771,6 +800,10 @@ function Set-Menu {
         Remove-SitecoreLicenseUserVariable
     }
     elseif ($menuSelection -eq 15) {
+        Write-Host "`nOpening 'sitecore-container-prerequisites' GitHub Repository" -ForegroundColor Magenta
+        Invoke-SCPGithubRepo
+    }
+    elseif ($menuSelection -eq 16) {
         Write-Host "`nBye!" -ForegroundColor Magenta
         exit
     }
