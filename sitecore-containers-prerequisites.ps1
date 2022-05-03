@@ -430,7 +430,7 @@ function Invoke-NetworkPortCheck {
 
         if ($null -ne $curPortConnections -and $curPortConnections.Length -gt 0){
             $successOrFailureSymbol = 'X';
-            $not = 'not';
+            $not = ' not';
             $textColor = 'Red';
         } else{
             $successOrFailureSymbol = '+';
@@ -439,7 +439,7 @@ function Invoke-NetworkPortCheck {
             $textColor = 'Green';
         };
 
-        Write-Host "$($successOrFailureSymbol) TCP port $($curPort.Port) (required for $($curPort.RequiredForDescription)) is $($not) available." -ForegroundColor ($textColor);
+        Write-Host "$($successOrFailureSymbol) TCP port $($curPort.Port) (required for $($curPort.RequiredForDescription)) is$($not) available." -ForegroundColor ($textColor);
     };
 
     if ($tcpPortAvailableCount -eq $portsToCheck.Length) {
