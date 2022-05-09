@@ -395,50 +395,56 @@ function Invoke-NetworkPortCheck {
     ########## Checking required TCP port availability  */
     Write-Host "`n`nCHECKING REQUIRED TCP PORT AVAILABILITY..." -ForegroundColor Cyan
 
-    $tcpPortAvailableCount = 0
-    if ((Get-NetTCPConnection | Where-Object Localport -eq 443).Count -eq 0) {
-        Write-Host "+ TCP port 443 (required for Traefik HTTPS proxy) is available." -ForegroundColor Green
-        $tcpPortAvailableCount++
-    }
-    else {
-        Write-Host "X TCP port 443 (required for Traefik HTTPS proxy) is not available." -ForegroundColor Red
-    }
+    [hashtable[]]$portsToCheck = @(
+        @{
+            Port = [int]443
+            RequiredForDescription = 'Traefik HTTPS proxy'
+        },
+        @{
+            Port = [int]8079
+            RequiredForDescription = 'Traefik dashboard'
+        },
+        @{
+            Port = [int]8081
+            RequiredForDescription = 'xConnect'
+        },
+        @{
+            Port = [int]8984
+            RequiredForDescription = 'Solr API and dashboard'
+        },
+        @{
+            Port = [int]14330
+            RequiredForDescription = 'SQL Server'
+        }          
+    );
 
-    if ((Get-NetTCPConnection | Where-Object Localport -eq 8079).Count -eq 0) {
-        Write-Host "+ TCP port 8079 (required for Traefik dashboard) is available." -ForegroundColor Green
-        $tcpPortAvailableCount++
-    }
-    else {
-        Write-Host "X TCP port 8079 (required for Traefik dashboard) is not available." -ForegroundColor Red
-    }
+    [int]$tcpPortAvailableCount = 0
+    [Microsoft.Management.Infrastructure.CimInstance[]]$netTcpConnections = Get-NetTCPConnection;
+        
+    foreach($curPort in $portsToCheck){
 
-    if ((Get-NetTCPConnection | Where-Object Localport -eq 8081).Count -eq 0) {
-        $tcpPortAvailableCount++
-        Write-Host "+ TCP port 8081 (required for xConnect) is available." -ForegroundColor Green
-    }
-    else {
-        Write-Host "X TCP port 8081 (required for xConnect) is not available." -ForegroundColor Red
-    }
+        [Microsoft.Management.Infrastructure.CimInstance[]]$curPortConnections = $netTcpConnections | Where-Object Localport -eq $curPort.Port;
+        [string]$successOrFailureSymbol = $null;
+        [string]$not = $null;
+        [string]$textColor = $null;
 
-    if ((Get-NetTCPConnection | Where-Object Localport -eq 8984).Count -eq 0) {
-        $tcpPortAvailableCount++
-        Write-Host "+ TCP port 8984 (required for Solr API and dashboard) is available." -ForegroundColor Green
-    }
-    else {
-        Write-Host "X TCP port 8984 (required for Solr API and dashboard) is not available." -ForegroundColor Red
-    }
+        if ($null -ne $curPortConnections -and $curPortConnections.Length -gt 0){
+            $successOrFailureSymbol = 'X';
+            $not = ' not';
+            $textColor = 'Red';
+        } else{
+            $successOrFailureSymbol = '+';
+            $not = '';            
+            $tcpPortAvailableCount++            
+            $textColor = 'Green';
+        };
 
-    if ((Get-NetTCPConnection | Where-Object Localport -eq 14330).Count -eq 0) {
-        $tcpPortAvailableCount++
-        Write-Host "+ TCP port 14330 (required for SQL Server) is available." -ForegroundColor Green
-    }
-    else {
-        Write-Host "X TCP port 14330 (required for SQL Server) is not available." -ForegroundColor Red
-    }
+        Write-Host "$($successOrFailureSymbol) TCP port $($curPort.Port) (required for $($curPort.RequiredForDescription)) is$($not) available." -ForegroundColor ($textColor);
+    };
 
-    if ($tcpPortAvailableCount -eq 5) {
+    if ($tcpPortAvailableCount -eq $portsToCheck.Length) {
         $script:tcpPortsAvailable = $true
-    }
+    };
 }
 
 function Invoke-FullPrerequisiteCheck {
