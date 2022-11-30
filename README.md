@@ -2,6 +2,12 @@
 
 Checks the machine for Sitecore Container compatibility.
 
+## tl;dr Usage
+You can run the script (in an admin-elevated PowerShell session) like this:<br/>
+`Start-BitsTransfer -Source "https://raw.githubusercontent.com/strezag/sitecore-containers-prerequisites/main/sitecore-containers-prerequisites.ps1"; .\sitecore-containers-prerequisites.ps1`
+
+## Features
+
 Quickly verify Sitecore Container:
 - Hardware requirements (CPU, RAM, DISK STORAGE and TYPES)
 - Operating system compatibility (OS Build Version, Hyper-V/Containers Feature Check, IIS Running State)
@@ -23,7 +29,6 @@ Download latest 10.1.0
 
 Miscellaneous
 - Remove Sitecore license persisted in user environment variable (can be problematic as it overrides session variables in modern Docker solutions)
-
 
 ## Full Scan Demo
 
