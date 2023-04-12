@@ -29,6 +29,7 @@ Download latest 10.1.0
 
 Miscellaneous
 - Remove Sitecore license persisted in user environment variable (can be problematic as it overrides session variables in modern Docker solutions)
+- Unattended and Quiet options with ability to select test type via parameter
 
 ## Full Scan Demo
 
