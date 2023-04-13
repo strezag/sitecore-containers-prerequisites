@@ -953,6 +953,7 @@ function Set-Menu {
 }
 
 # This function is used to override the Write-Host function
+# Use Microsoft.PowerShell.Utility\Write-Host anywhere you want to suppress this override, such as in basic checks (admin, ISE, etc.)
 function global:Write-Host() {
     # Suppress output when the -Quiet switch is used
     if ($Quiet) {
@@ -978,14 +979,20 @@ $script:dockerDNSSuccess = $false
 $script:tcpPortsAvailable = $false
 $script:psModuleScDockerTools = $false
 
+# Require Unattended mode for Quiet mode
+if ($Quiet -and !$Unattended) {
+    Microsoft.PowerShell.Utility\Write-Host "The -Quiet switch can only be used with the -Unattended switch." -ForegroundColor Red
+    exit
+}
+
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
+    Microsoft.PowerShell.Utility\Write-Host "Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
     exit
 }
 
 if ($host.name -eq "Windows PowerShell ISE Host") {
-    Write-Host "PowerShell ISE is not supported.  Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
+    Microsoft.PowerShell.Utility\Write-Host "PowerShell ISE is not supported.  Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
     exit
 }
 
