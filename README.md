@@ -9,7 +9,7 @@ You can run the script (in an admin-elevated PowerShell session) like this:<br/>
 To run Unattended and Quiet with a Pass or Fail message:<br/>
 `Start-BitsTransfer -Source "https://raw.githubusercontent.com/strezag/sitecore-containers-prerequisites/main/sitecore-containers-prerequisites.ps1"; .\sitecore-containers-prerequisites.ps1 -Unattended -Quiet; Write-Host "Exit code is $LastExitCode which means you $($LastExitCode -eq 0 ? "passed" : "failed")"`
 
-To quickly run Unattended with full test output:<br/>
+To quickly run Unattended with full test selection and display output:<br/>
 `Start-BitsTransfer -Source "https://raw.githubusercontent.com/strezag/sitecore-containers-prerequisites/main/sitecore-containers-prerequisites.ps1"; .\sitecore-containers-prerequisites.ps1 -Unattended`
 
 ## Features
