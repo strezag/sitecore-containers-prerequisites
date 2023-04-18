@@ -29,6 +29,29 @@
      @GabeStreza
 #>
 
+[CmdletBinding()]
+param (
+    # Run script in unattended mode (no prompts)
+    [Parameter()]
+    [switch]
+    $Unattended,
+
+    # Execute specified menu option in unattended mode; default is full prerequisite check
+    [Parameter()]
+    [int]
+    $menuSelection = 0,
+
+    # Suppress all output
+    [Parameter()]
+    [switch]
+    $Quiet,
+
+    # Suppress Docker DNS test passing requirement
+    [Parameter()]
+    [switch]
+    $SuppressDockerDNSRequirement
+)
+
 function Invoke-Menu () {
     # 'Invoke-Menu' is inspired by Josiah Deal: https://community.spiceworks.com/scripts/show/4656-powershell-create-menu-easily-add-arrow-key-driven-menu-to-scripts
     param(
@@ -372,6 +395,7 @@ function Invoke-SoftwareCheck {
         $dockerNetworkSuccess = (& docker run --rm mcr.microsoft.com/powershell:lts-nanoserver-1809 pwsh.exe -Command Test-Connection -TcpPort 80 -TargetName nuget.org)
         if ($dockerNetworkSuccess -eq "True") {
             Write-Host "+ Docker Desktop can successfully reach the internet with current workstation and/or DNS settings." -ForegroundColor Green
+            $script:dockerDNSSuccess = $true
         }
         else {
             Write-Host "`Trying again with forced DNS (okay if test above without forced DNS failed as long as this next, forced DNS test works)..." -ForegroundColor Cyan
@@ -379,6 +403,7 @@ function Invoke-SoftwareCheck {
             if ($dockerNetworkSuccess -eq "True")
             {
                 Write-Host "+ Docker Desktop can successfully reach the internet with forced Google + CloudFlare Public DNS settings. This may mean that you need to use similar settings in your Docker daemon.json (for all solutions) or the docker-compose.yml for your solution(s)." -ForegroundColor Yellow
+                $script:dockerDNSSuccess = $true
             }
             else {
                 Write-Host "X Docker Desktop cannot reach the internet. Check Docker network configuration and the InterfaceMetric values on your network adapter." -ForegroundColor Red
@@ -461,7 +486,7 @@ function Invoke-FullPrerequisiteCheck {
 
     Write-Host "`n**********************************************`n" -ForegroundColor Cyan 
 
-    if ($script:HwCoresCheckPassed -and $script:hwRAMCheckPassed -and $script:diskStorageCheckPassed -and $script:OSCheckPassed -and $script:IISOffCheckPassed -and $script:hyperVEnabled -and $script:containersFeatureEnabled -and $script:dockerInstalled -and $script:dockerRunning -and $script:tcpPortsAvailable -and $psModuleScDockerTools) {
+    if ($script:HwCoresCheckPassed -and $script:hwRAMCheckPassed -and $script:diskStorageCheckPassed -and $script:OSCheckPassed -and $script:IISOffCheckPassed -and $script:hyperVEnabled -and $script:containersFeatureEnabled -and $script:dockerInstalled -and $script:dockerRunning -and $script:dockerDNSSuccess -and $script:tcpPortsAvailable -and $psModuleScDockerTools) {
         Write-Host "This machine is READY to for Sitecore Containers!`n`n" -ForegroundColor Green
     }
     else {
@@ -675,40 +700,140 @@ function Remove-SitecoreLicenseUserVariable {
 }
 
 function Invoke-Pause {
-    Write-Host -NoNewLine "`n`nPress any key to continue..." -ForegroundColor Yellow
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    Set-Menu
+    if (-not $Unattended)
+    {
+        Write-Host -NoNewLine "`n`nPress any key to continue..." -ForegroundColor Yellow
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        Set-Menu
+    }
+    else
+    {
+        Return
+    }
+}
+
+function Complete-Test ($testCode) {    
+    if ($Unattended) {
+        # Check that all tests passed for full prerequisite check and exit with result code
+        if ($menuSelection -eq 0 -and $testCode -eq 0)
+        {
+            if ($script:HwCoresCheckPassed -and $script:hwRAMCheckPassed -and $script:diskStorageCheckPassed -and $script:OSCheckPassed -and $script:IISOffCheckPassed -and $script:hyperVEnabled -and $script:containersFeatureEnabled -and $script:dockerInstalled -and $script:dockerRunning -and $script:tcpPortsAvailable -and $psModuleScDockerTools) 
+            {
+                if ($SuppressDockerDNSRequirement) {
+                    exit 0
+                }
+                elseif ($script:dockerDNSSuccess) {
+                    exit 0
+                }
+                else {
+                    exit 1
+                }
+            }
+            else
+            {
+                exit 1
+            }
+        }
+
+        # Check that all tests passed for hardware prerequisite check and exit with result code
+        elseif ($menuSelection -eq 1 -and $testCode -eq 1)
+        {
+            if ($script:HwCoresCheckPassed -and $script:hwRAMCheckPassed -and $script:diskStorageCheckPassed -and $script:diskTypeCheckPassed) 
+            {
+                exit 0
+            }
+            else
+            {
+                exit 1
+            }
+        }
+        
+        # Check that all tests passed for operating system prerequisite check and exit with result code
+        elseif ($menuSelection -eq 2 -and $testCode -eq 2)
+        {
+            if ($script:OSCheckPassed -and $script:IISOffCheckPassed -and $script:hyperVEnabled -and $script:containersFeatureEnabled) 
+            {
+                exit 0
+            }
+            else
+            {
+                exit 1
+            }
+        }
+
+        # Check that all tests passed for software prerequisite check and exit with result code
+        elseif ($menuSelection -eq 3 -and $testCode -eq 3)
+        {
+            if ($script:dockerInstalled -and $script:dockerRunning) 
+            {
+                if ($SuppressDockerDNSRequirement) {
+                    exit 0
+                }
+                elseif ($script:dockerDNSSuccess) {
+                    exit 0
+                }
+                else {
+                    exit 1
+                }
+            }
+            else
+            {
+                exit 1
+            }
+        }
+
+        # Check that all tests passed for network port availability check and exit with result code
+        elseif ($menuSelection -eq 4 -and $testCode -eq 4)
+        {
+            if ($script:tcpPortsAvailable) 
+            {
+                exit 0
+            }
+            else
+            {
+                exit 1
+            }
+        }
+    }
 }
 
 function Set-Menu {
-    $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", 'Install mkcert', 'Install SitecoreDockerTools PowerShell Module', "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", 'Download 10.x.x Developer Installation Guide (PDF)', 'Download 10.x.x Sitecore Container Package (ZIP)', 'Open Sitecore Container Docs', 'Remove Sitecore License in Persisted User Environment Variable', "Open 'sitecore-container-prerequisites' GitHub repository", 'Exit')
+    if (-not $Unattended)
+    {
+        $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", 'Install mkcert', 'Install SitecoreDockerTools PowerShell Module', "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", 'Download 10.x.x Developer Installation Guide (PDF)', 'Download 10.x.x Sitecore Container Package (ZIP)', 'Open Sitecore Container Docs', 'Remove Sitecore License in Persisted User Environment Variable', "Open 'sitecore-container-prerequisites' GitHub repository", 'Exit')
 
-    $menuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $menuOptions
-    
+        $menuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $menuOptions
+    }
+
     if ($menuSelection -eq 0) {
         Write-Host "`nFull Prerequisite Check" -ForegroundColor Magenta
         Invoke-FullPrerequisiteCheck
         Invoke-Pause
+        Complete-Test $menuSelection
     }
     elseif ($menuSelection -eq 1) {
         Write-Host "`nHardware Prerequisite Check" -ForegroundColor Magenta
         Invoke-HardwareCheck
         Invoke-Pause
+        Complete-Test $menuSelection
     }
     elseif ($menuSelection -eq 2) {
         Write-Host "`nOperating System & Features Check" -ForegroundColor Magenta
         Invoke-OperatingSystemCheck
         Invoke-Pause
+        Complete-Test $menuSelection
     }
     elseif ($menuSelection -eq 3) {
         Write-Host "`nSoftware Prerequisite Check" -ForegroundColor Magenta
         Invoke-SoftwareCheck
         Invoke-Pause
+        Complete-Test $menuSelection
     }
     elseif ($menuSelection -eq 4) {
         Write-Host "`nNetwork Port Check" -ForegroundColor Magenta
         Invoke-NetworkPortCheck
         Invoke-Pause
+        Complete-Test $menuSelection
     }
     elseif ($menuSelection -eq 5) {
         Write-Host "`nInstalling Chocolatey" -ForegroundColor Magenta
@@ -827,6 +952,20 @@ function Set-Menu {
     }
 }
 
+# This function is used to override the Write-Host function
+# Use Microsoft.PowerShell.Utility\Write-Host anywhere you want to suppress this override, such as in basic checks (admin, ISE, etc.)
+function global:Write-Host() {
+    # Suppress output when the -Quiet switch is used
+    if ($Quiet) {
+        return
+    }
+    else {
+        # Call the original Write-Host function, passing all arguments        
+        $arguments = @($args)
+        Microsoft.PowerShell.Utility\Write-Host @arguments
+    }
+}
+
 $script:HwCoresCheckPassed = $false
 $script:hwRAMCheckPassed = $false
 $script:diskStorageCheckPassed = $false
@@ -836,17 +975,24 @@ $script:hyperVEnabled = $false
 $script:containersFeatureEnabled = $false
 $script:dockerInstalled = $false
 $script:dockerRunning = $false
+$script:dockerDNSSuccess = $false
 $script:tcpPortsAvailable = $false
 $script:psModuleScDockerTools = $false
 
+# Require Unattended mode for Quiet mode
+if ($Quiet -and !$Unattended) {
+    Microsoft.PowerShell.Utility\Write-Host "The -Quiet switch can only be used with the -Unattended switch." -ForegroundColor Red
+    exit
+}
+
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (!$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
+    Microsoft.PowerShell.Utility\Write-Host "Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
     exit
 }
 
 if ($host.name -eq "Windows PowerShell ISE Host") {
-    Write-Host "PowerShell ISE is not supported.  Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
+    Microsoft.PowerShell.Utility\Write-Host "PowerShell ISE is not supported.  Please open a PowerShell terminal as an administrator, then try again." -ForegroundColor Red
     exit
 }
 
