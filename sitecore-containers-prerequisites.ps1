@@ -224,6 +224,9 @@ function Invoke-OperatingSystemCheck {
             22621 {
                 Write-Host "+ Windows 11 22H2 detected. " -ForegroundColor Green
             }
+            22631 {                
+                Write-Host "+ Windows 11 23H2 detected. " -ForegroundColor Green
+            }
             Default { 
                 $script:OSCheckPassed = $false 
             }
