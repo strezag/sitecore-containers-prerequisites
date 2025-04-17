@@ -19,9 +19,9 @@
         - Containers
         - Hyper-V
 
-    Download latest 10.1.0 
+    Download latest 10.X.X
         - Container Package ZIP
-        - Local Development Installation Guide PDF
+        - Local Development Installation Guide (accessed through browser)
 
     Open Container Docs
 
@@ -193,48 +193,48 @@ function Invoke-OperatingSystemCheck {
     ########## Check OS version Windows 10/Server 1903 or later */
     Write-Host "`n`nCHECKING OPERATING SYSTEM COMPATIBILITY..." -ForegroundColor Cyan
 
-    $OSVersion = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName)
+    $OSVersion    = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName
     $OSProductName = $OSVersion.ProductName
-    if ($OSProductName -match "Enterprise|Professional|Education|Pro") {
-        switch ([System.Environment]::OSVersion.Version.Build) {
-            18362 { 
-                Write-Host "+ $OSProductName 1903 detected." -ForegroundColor Green
-            }
-            18363 { 
-                Write-Host "+ $OSProductName 1909 detected." -ForegroundColor Green
-            }
-            19041 { 
-                Write-Host "+ $OSProductName 2004 detected." -ForegroundColor Green
-            }
-            19042 { 
-                Write-Host "+ $OSProductName 20H2 detected." -ForegroundColor Green
-            }
-            19043 {
-                Write-Host "+ $OSProductName 21H1 detected. " -ForegroundColor Green
-            }
-            19044 {
-                Write-Host "+ $OSProductName 21H2 detected. " -ForegroundColor Green
-            }
-            19045 {
-                Write-Host "+ $OSProductName 22H2 detected. " -ForegroundColor Green
-            }
-            22000 {
-                Write-Host "+ Windows 11 21H2 detected. " -ForegroundColor Green
-            }
-            22621 {
-                Write-Host "+ Windows 11 22H2 detected. " -ForegroundColor Green
-            }
-            22631 {                
-                Write-Host "+ Windows 11 23H2 detected. " -ForegroundColor Green
-            }
-            Default { 
-                $script:OSCheckPassed = $false 
-            }
+    $build        = [System.Environment]::OSVersion.Version.Build
+
+    # initialize flags
+    $script:OSCheckPassed             = $false
+    $script:ProcessIsolationSupported = $false
+
+    # only Pro / Enterprise / Education qualify
+    if ($OSProductName -notmatch 'Enterprise|Professional|Education|Pro') {
+        Write-Host "X $OSProductName detected.`n  > Docker requires Windows 10/11 Professional, Enterprise, or Education." -ForegroundColor Red
+        return
+    }
+
+    if ($OSProductName -match 'Windows 10') {
+
+        # need 1903 (build 18362)+ for Docker
+        if ($build -lt 18362) {
+            Write-Host "X $OSProductName build $build detected.`n  > Requires Windows 10 1903 (build 18362) or later." -ForegroundColor Red
+            return
+        }
+
+        # at this point general Docker support is OK
+        $script:OSCheckPassed = $true
+
+        # need 1909 (build 18363)+ for process isolation
+        if ($build -ge 18363) {
+            Write-Host "+ $OSProductName build $build detected; Docker & Process Isolation supported." -ForegroundColor Green
+            $script:ProcessIsolationSupported = $true
+        }
+        else {
+            Write-Host "⚠ $OSProductName build $build detected (1903). Docker OK; Process Isolation requires 1909 (build 18363) or later." -ForegroundColor Yellow
         }
     }
+    elseif ($OSProductName -match 'Windows 11') {
+        # any Windows 11 Pro/Ent/Edu build is fine
+        Write-Host "+ $OSProductName build $build detected; Docker & Process Isolation supported." -ForegroundColor Green
+        $script:OSCheckPassed             = $true
+        $script:ProcessIsolationSupported = $true
+    }
     else {
-        Write-Host "X $OSProductName detected.`n`  > Virtualization cannot be enabled on this OS. (Windows 10 Enterprise, Professional, or Education required." -ForegroundColor Red
-        $script:OSCheckPassed = $false 
+        Write-Host "X Unsupported Windows version: $OSProductName detected." -ForegroundColor Red
     }
 
     if ($script:OSCheckPassed) {
@@ -582,42 +582,12 @@ function Invoke-SitecoreContainerGuideDownload {
         [Parameter(Mandatory = $True)] [String] $Version
     )
 
-    if($Version -eq "10.0.0"){
-        Invoke-GuideDownload -Version "10.0.0" -Url "https://sitecoredev.azureedge.net/~/media/184E63BB1E0547C682C9170FEE95BA29.ashx?date=20200901T125111" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/100/Sitecore_Experience_Platform_100.aspx"
-    }elseif ($Version -eq "10.0.1") {
-        Invoke-GuideDownload -Version "10.0.1" -Url "https://sitecoredev.azureedge.net/~/media/26D26751543C448A968E2BDB2BD16D60.ashx?date=20210702T101725" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/100/Sitecore_Experience_Platform_100_Update1.aspx"
-    }elseif ($Version -eq "10.0.2") {
-        Invoke-GuideDownload -Version "10.0.2" -Url "https://sitecoredev.azureedge.net/~/media/D81C4664C09A41DF993D95AB44C4A6D3.ashx?date=20210630T131208" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/100/Sitecore_Experience_Platform_100_Update2.aspx"
-    }elseif ($Version -eq "10.1.0") {
-        Invoke-GuideDownload -Version "10.1.0" -Url "https://sitecoredev.azureedge.net/~/media/F53BECFEBDC64C8695EDF60D4E435AEA.ashx?date=20210224T164409" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/101/Sitecore_Experience_Platform_101.aspx"
-    }elseif ($Version -eq "10.1.1") {
-        Invoke-GuideDownload -Version "10.1.1" -Url "https://sitecoredev.azureedge.net/~/media/6FDE5840A6C0496E982A5C33F4DB3AF8.ashx?date=20210609T210507" -SitecoreReleasePage "https://dev.sitecore.net/en/Downloads/Sitecore_Experience_Platform/101/Sitecore_Experience_Platform_101_Update1.aspx"
-    }elseif ($Version -eq "10.1.2") {
-        Invoke-GuideDownload -Version "10.1.2" -Url "https://sitecoredev.azureedge.net/~/media/FCD3AEA2014F4FCBA71DFE6FBC5475F3.ashx?date=20211008T145241" -SitecoreReleasePage "https://dev.sitecore.net/Downloads/Sitecore_Experience_Platform/101/Sitecore_Experience_Platform_101_Update2.aspx"
-    }elseif ($Version -eq "10.2.0") {
-        Invoke-GuideDownload -Version "10.2.0" -Url "https://sitecoredev.azureedge.net/~/media/AC62878E09234AC9BAA434FCCA463925.ashx?date=20211103T162237" -SitecoreReleasePage "https://dev.sitecore.net/Downloads/Sitecore_Experience_Platform/102/Sitecore_Experience_Platform_102.aspx"
-    }
-}
-
-function Invoke-GuideDownload {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $True)] [String] $Version,
-        [Parameter(Mandatory = $True)] [String] $Url,
-        [Parameter(Mandatory = $True)] [String] $SitecoreReleasePage
-
-    )
-    Start-Process $SitecoreReleasePage
-    $FileNameFormat = "Installation Guide_for_Sitecore_XP_Developer_Workstation_with_Containers.{0}.pdf"
-    $FileName = $([string]::Format($FileNameFormat, $Version))
-    if(!(Test-Path "$((Get-Location).Path)\$FileName")){
-        Write-Host "`nDownloading 'Installation Guide for Developer Workstation with Containers ($Version)' to $((Get-Location).Path).`n" -ForegroundColor Magenta
-        Invoke-WebRequest -Uri $Url -OutFile ".\$FileName"
-        Invoke-Item "$((Get-Location).Path)\$FileName"
-    }else{
-        Write-Host "`n'$FileName' is already downloaded.  `nInvoking PDF..." $((Get-Location).Path)\$FileName".`n" -ForegroundColor Magenta
-        Invoke-Item "$((Get-Location).Path)\$FileName"
-    }
+    # Open the product's downloads page in default browser
+    $parts = $Version.Split('.')
+    $versionCode = "{0}{1}" -f $parts[0], $parts[1]
+    $url = "https://developers.sitecore.com/downloads/Sitecore_Experience_Platform/$versionCode/Sitecore_Experience_Platform_$versionCode"
+    Write-Host "Opening Sitecore Experience Platform $Version downloads page: $url" -ForegroundColor Cyan
+    Start-Process $url
 
     Invoke-Pause
 }
@@ -642,6 +612,10 @@ function Invoke-SitecoreContainerPackageDownload {
         Invoke-PackageDownload -FullVersion "10.1.2.006578.651"
     }elseif ($Version -eq "10.2.0") {
         Invoke-PackageDownload -FullVersion "10.2.0.006766.683"
+    }elseif ($Version -eq "10.3.2") {
+        Invoke-PackageDownload -FullVersion "10.3.2.010837.1896"
+    }elseif ($Version -eq "10.4.0") {
+        Invoke-PackageDownload -FullVersion "10.4.0.010422.1819"
     }
 }
 
@@ -666,7 +640,7 @@ function Invoke-PackageDownload{
     Invoke-Pause
 }
 function Invoke-OpenContainerDocs {
-    $Url = "https://doc.sitecore.com/en/developers/102/developer-tools/containers-in-sitecore-development.html"
+    $Url = "https://doc.sitecore.com/xp/en/developers/104/developer-tools/containers-in-sitecore-development.html"
     Start-Process $Url
     Invoke-Pause
 }
@@ -803,7 +777,7 @@ function Complete-Test ($testCode) {
 function Set-Menu {
     if (-not $Unattended)
     {
-        $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", 'Install mkcert', 'Install SitecoreDockerTools PowerShell Module', "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", 'Download 10.x.x Developer Installation Guide (PDF)', 'Download 10.x.x Sitecore Container Package (ZIP)', 'Open Sitecore Container Docs', 'Remove Sitecore License in Persisted User Environment Variable', "Open 'sitecore-container-prerequisites' GitHub repository", 'Exit')
+        $menuOptions = @('Scan All Prerequisites', 'Scan Hardware Prerequisites', 'Scan Operating System & Features', 'Scan Software Prerequisites', 'Scan Network Port Availability', 'Install Chocolatey', "Install Docker Desktop", 'Install mkcert', 'Install SitecoreDockerTools PowerShell Module', "Enable 'Containers' Windows Feature", "Enable 'Hyper-V' Windows Features", 'Access 10.x.x Developer Installation Guide (Web)', 'Download 10.x.x Sitecore Container Package (ZIP)', 'Open Sitecore Container Docs', 'Remove Sitecore License in Persisted User Environment Variable', "Open 'sitecore-container-prerequisites' GitHub repository", 'Exit')
 
         $menuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $menuOptions
     }
@@ -871,7 +845,7 @@ function Set-Menu {
         Invoke-Pause
     }
     elseif ($menuSelection -eq 11) {
-        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', '10.1.2', '10.2.0', 'Exit')
+        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', '10.1.2', '10.2.0', '10.3.2', '10.4.0', 'Exit')
         $innerMenuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $innerMenuOptions
         if ($innerMenuSelection -eq 0) {
             Write-Host "`nOpening Sitecore 10.0.0 Release Page" -ForegroundColor Magenta
@@ -901,10 +875,18 @@ function Set-Menu {
             Write-Host "`nOpening Sitecore 10.2.0 Release Page" -ForegroundColor Magenta
             Invoke-SitecoreContainerGuideDownload -Version "10.2.0"
             Invoke-Pause
+        }elseif ($innerMenuSelection -eq 7) {
+            Write-Host "`nOpening Sitecore 10.3.2 Release Page" -ForegroundColor Magenta
+            Invoke-SitecoreContainerGuideDownload -Version "10.3.2"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 8) {
+            Write-Host "`nOpening Sitecore 10.4.0 Release Page" -ForegroundColor Magenta
+            Invoke-SitecoreContainerGuideDownload -Version "10.4.0"
+            Invoke-Pause
         }
     }
     elseif ($menuSelection -eq 12) {
-        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', '10.1.2', '10.2.0', 'Exit')
+        $innerMenuOptions = @('10.0.0', '10.0.1', '10.0.2', '10.1.0', '10.1.1', '10.1.2', '10.2.0', '10.3.2', '10.4.0', 'Exit')
         $innerMenuSelection = Invoke-Menu -MenuTitle "**********************************************`nPrerequisite Validator for Sitecore Containers`n**********************************************" -MenuOptions $innerMenuOptions
 
         if ($innerMenuSelection -eq 0) {
@@ -935,10 +917,18 @@ function Set-Menu {
             Write-Host "`nDownloading 10.2.0 Container Deployment Package" -ForegroundColor Magenta
             Invoke-SitecoreContainerPackageDownload -Version "10.2.0"
             Invoke-Pause
+        }elseif ($innerMenuSelection -eq 7) {
+            Write-Host "`nDownloading 10.3.2 Container Deployment Package" -ForegroundColor Magenta
+            Invoke-SitecoreContainerPackageDownload -Version "10.3.2"
+            Invoke-Pause
+        }elseif ($innerMenuSelection -eq 8) {
+            Write-Host "`nDownloading 10.4.0 Container Deployment Package" -ForegroundColor Magenta
+            Invoke-SitecoreContainerPackageDownload -Version "10.4.0"
+            Invoke-Pause
         }
     }
     elseif ($menuSelection -eq 13) {
-        Write-Host "`nOpen 10.2.0 Container Docs" -ForegroundColor Magenta
+        Write-Host "`nOpen 10.4.0 Container Docs" -ForegroundColor Magenta
         Invoke-OpenContainerDocs
     }
     elseif ($menuSelection -eq 14) {
